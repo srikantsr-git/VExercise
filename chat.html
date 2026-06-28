@@ -531,7 +531,7 @@
   const API_ENDPOINT = 'https://gateway.9arm.co/v1/chat/completions';
   const API_KEY_ENV = '${{ secrets.MCP_9ARM_AUTH }}';
   
-  let apiKey = null;
+  let apiKey = API_KEY_ENV;
   let conversationHistory = [];
 
   const elements = {
