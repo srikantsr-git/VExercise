@@ -660,7 +660,7 @@
           <div class="endpoint-card">
             <div class="endpoint-header">
               <span class="method-badge">GET</span>
-              <span class="endpoint-path">/exercises<span style="color:var(--text-tertiary)">?category=Strength&amp;body_part=Chest</span></span>
+              <span class="endpoint-path">/exercises<span style="color:var(--text-tertiary)">?category=waist&amp;body_part=waist</span></span>
               <span class="endpoint-desc">Filter by category, body part, equipment</span>
             </div>
             <div class="endpoint-body">
@@ -837,16 +837,16 @@ curl -s "${base}/exercises?page=2&limit=50"
 
     getFiltered: (base) =>
 `# Filter by category
-curl -s "${base}/exercises?category=Strength&page=1&limit=20"
+curl -s "${base}/exercises?category=waist&page=1&limit=20"
 
 # Filter by body part
-curl -s "${base}/exercises?body_part=Chest&page=1&limit=20"
+curl -s "${base}/exercises?body_part=waist&page=1&limit=20"
 
 # Combine filters
-curl -s "${base}/exercises?category=Strength&body_part=Chest&page=1&limit=20"
+curl -s "${base}/exercises?category=waist&body_part=waist&page=1&limit=20"
 
 # With equipment filter
-curl -s "${base}/exercises?equipment=Barbell&target=Pectorals&page=1&limit=20"`,
+curl -s "${base}/exercises?equipment=body%20weight&target=abs&page=1&limit=20"`,
   },
 
   js: {
@@ -862,9 +862,9 @@ async function getExercise(id) {
 
 // Usage
 const exercise = await getExercise('0001');
-console.log(exercise.name);        // "Barbell Bench Press"
-console.log(exercise.category);    // "Strength"
-console.log(exercise.gif_url);     // "videos/0001.gif"`,
+console.log(exercise.name);        // "3/4 sit-up"
+console.log(exercise.category);    // "waist"
+console.log(exercise.gif_url);     // "videos/0001-2gPfomN.gif"`,
 
     getAll: (base) =>
 `const BASE_URL = '${base}';
@@ -909,12 +909,12 @@ async function getExercisesFiltered({
 
 // Usage
 const result = await getExercisesFiltered({
-  category: 'Strength',
-  bodyPart: 'Chest',
+  category: 'waist',
+  bodyPart: 'waist',
   page: 1,
   limit: 20,
 });
-console.log(result.data[0].name); // e.g. "Barbell Bench Press"`,
+console.log(result.data[0].name); // e.g. "3/4 sit-up"`,
   },
 
   python: {
@@ -931,9 +931,9 @@ def get_exercise(exercise_id: str) -> dict:
 
 # Usage
 exercise = get_exercise("0001")
-print(exercise["name"])      # Barbell Bench Press
-print(exercise["category"])  # Strength
-print(exercise["gif_url"])   # videos/0001.gif`,
+print(exercise["name"])      # 3/4 sit-up
+print(exercise["category"])  # waist
+print(exercise["gif_url"])   # videos/0001-2gPfomN.gif`,
 
     getAll: (base) =>
 `import requests
@@ -982,12 +982,12 @@ def get_exercises_filtered(
 
 # Usage
 result = get_exercises_filtered(
-    category="Strength",
-    body_part="Chest",
+    category="waist",
+    body_part="waist",
     page=1,
     limit=20,
 )
-print(result["data"][0]["name"])  # e.g. Barbell Bench Press`,
+print(result["data"][0]["name"])  # e.g. 3/4 sit-up`,
   },
 
   csharp: {
@@ -1006,9 +1006,9 @@ async Task<Exercise?> GetExerciseAsync(string id)
 
 // Usage
 var exercise = await GetExerciseAsync("0001");
-Console.WriteLine(exercise?.Name);     // Barbell Bench Press
-Console.WriteLine(exercise?.Category); // Strength
-Console.WriteLine(exercise?.GifUrl);   // videos/0001.gif
+Console.WriteLine(exercise?.Name);     // 3/4 sit-up
+Console.WriteLine(exercise?.Category); // waist
+Console.WriteLine(exercise?.GifUrl);   // videos/0001-2gPfomN.gif
 
 // Model
 record Exercise(
@@ -1068,8 +1068,8 @@ async Task<PagedResult<Exercise>> GetExercisesFilteredAsync(
 
 // Usage
 var result = await GetExercisesFilteredAsync(
-    category: "Strength", bodyPart: "Chest", page: 1, limit: 20);
-Console.WriteLine(result.Data[0].Name); // e.g. Barbell Bench Press`,
+    category: "waist", bodyPart: "waist", page: 1, limit: 20);
+Console.WriteLine(result.Data[0].Name); // e.g. 3/4 sit-up`,
   },
 
   java: {
@@ -1162,7 +1162,7 @@ String getExercisesFiltered(
 }
 
 // Usage
-String json = getExercisesFiltered(1, 20, "Strength", "Chest", null);`,
+String json = getExercisesFiltered(1, 20, "waist", "waist", null);`,
   },
 
   php: {
@@ -1182,9 +1182,9 @@ function getExercise(string $id): array
 
 // Usage
 $exercise = getExercise('0001');
-echo $exercise['name'];      // Barbell Bench Press
-echo $exercise['category'];  // Strength
-echo $exercise['gif_url'];   // videos/0001.gif`,
+echo $exercise['name'];      // 3/4 sit-up
+echo $exercise['category'];  // waist
+echo $exercise['gif_url'];   // videos/0001-2gPfomN.gif`,
 
     getAll: (base) =>
 `<?php
@@ -1232,8 +1232,8 @@ function getExercisesFiltered(
 }
 
 // Usage
-$result = getExercisesFiltered(1, 20, 'Strength', 'Chest');
-echo $result['data'][0]['name']; // e.g. Barbell Bench Press`,
+$result = getExercisesFiltered(1, 20, 'waist', 'waist');
+echo $result['data'][0]['name']; // e.g. 3/4 sit-up`,
   },
 
   go: {
@@ -1268,8 +1268,8 @@ func GetExercise(id string) (map[string]any, error) {
 func main() {
     exercise, err := GetExercise("0001")
     if err != nil { panic(err) }
-    fmt.Println(exercise["name"])     // Barbell Bench Press
-    fmt.Println(exercise["category"]) // Strength
+    fmt.Println(exercise["name"])     // 3/4 sit-up
+    fmt.Println(exercise["category"]) // waist
 }`,
 
     getAll: (base) =>
@@ -1344,10 +1344,10 @@ func GetExercisesFiltered(page, limit int, category, bodyPart, equipment string)
 
 // Usage
 func main() {
-    result, err := GetExercisesFiltered(1, 20, "Strength", "Chest", "")
+    result, err := GetExercisesFiltered(1, 20, "waist", "waist", "")
     if err != nil { panic(err) }
     data := result["data"].([]any)
-    fmt.Println(data[0].(map[string]any)["name"]) // e.g. Barbell Bench Press
+    fmt.Println(data[0].(map[string]any)["name"]) // e.g. 3/4 sit-up
 }`,
   },
 };
@@ -1381,7 +1381,7 @@ function buildLlmPrompt(fwKey, dbKey) {
 
 ## Dataset Overview
 - 1,324 fitness exercises
-- Fields: id (string, e.g. "0001"), name, category, body_part, equipment, instructions_en (full text), instructions_es (Spanish text), instructions_it (Italian text), instructions_tr (Turkish text), muscle_group, secondary_muscles (JSON array of strings), target, image (relative path like "images/0001.jpg"), gif_url (relative path like "videos/0001.gif"), created_at
+- Fields: id (string, e.g. "0001"), name, category, body_part, equipment, instructions_en (full text), instructions_es (Spanish text), instructions_it (Italian text), instructions_tr (Turkish text), muscle_group, secondary_muscles (JSON array of strings), target, image (relative path like "images/0001-2gPfomN.jpg"), gif_url (relative path like "videos/0001-2gPfomN.gif"), created_at
 
 ## Database Schema (${db.name})
 \`\`\`sql
