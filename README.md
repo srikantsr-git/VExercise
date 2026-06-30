@@ -11,7 +11,7 @@
   <img src="images/0334-DsgkuIt.jpg" width="140" style="border-radius:8px; margin:4px;" />
 </p>
 
-**A comprehensive, ready-to-use fitness exercise dataset with 1,324 exercises — each with animation GIFs, thumbnail images, muscle group info, equipment data, and full multilingual instructions (English, Spanish, Italian, Turkish, Russian).**
+**A comprehensive, ready-to-use fitness exercise dataset with 1,324 exercises — each with animation GIFs, thumbnail images, muscle group info, equipment data, and full multilingual instructions (English, Spanish, Italian, Turkish, Russian, Chinese).**
 
 [![Exercises](https://img.shields.io/badge/Exercises-1324-blue?style=flat-square)](data/exercises.json)
 [![Videos](https://img.shields.io/badge/Animation%20GIFs-1324-green?style=flat-square)](videos/)
@@ -89,7 +89,7 @@ Each exercise entry contains:
 | Muscle Group | Supporting / synergist muscles |
 | Equipment | Equipment required (or `body weight` for bodyweight) |
 | Instructions | Step-by-step instructions for each exercise |
-| Available Languages | 🇬🇧 English · 🇪🇸 Spanish · 🇮🇹 Italian · 🇹🇷 Turkish · 🇷🇺 Russian |
+| Available Languages | 🇬🇧 English · 🇪🇸 Spanish · 🇮🇹 Italian · 🇹🇷 Turkish · 🇷🇺 Russian · 🇨🇳 Chinese |
 | Thumbnail | Static `.jpg` preview image |
 | Animation GIF | `.gif` animation showing the movement |
 
@@ -199,6 +199,8 @@ Each record in `data/exercises.json` follows this structure:
 | `instructions.es` | `string` | Full step-by-step instructions in Spanish |
 | `instructions.it` | `string` | Full step-by-step instructions in Italian |
 | `instructions.tr` | `string` | Full step-by-step instructions in Turkish |
+| `instructions.ru` | `string` | Full step-by-step instructions in Russian |
+| `instructions.zh` | `string` | Full step-by-step instructions in Chinese |
 | `muscle_group` | `string` | Primary synergist muscle group |
 | `secondary_muscles` | `array[string]` | Additional muscles involved |
 | `target` | `string` | Primary target muscle (e.g. `"biceps"`, `"pectoralis major"`) |
@@ -219,7 +221,9 @@ Each record in `data/exercises.json` follows this structure:
     "en": "Lie flat on your back with your knees bent and feet flat on the ground. Place your hands behind your head with your elbows pointing outwards. Engaging your abs, slowly lift your upper body off the ground, curling forward until your torso is at a 45-degree angle. Pause for a moment at the top, then slowly lower your upper body back down to the starting position. Repeat for the desired number of repetitions.",
     "es": "Túmbate sobre tu espalda con las rodillas flexionadas y los pies apoyados en el suelo. Coloca las manos detrás de la cabeza con los codos apuntando hacia afuera. Activando el abdomen, levanta lentamente la parte superior del cuerpo del suelo, curvándote hacia adelante hasta que tu torso forme un ángulo de 45 grados. Haz una pausa por un momento en la parte superior, luego baja lentamente la parte superior del cuerpo de vuelta a la posición inicial. Repite el número de repeticiones deseado.",
     "it": "Sdraiati sulla schiena con le ginocchia piegate e i piedi appoggiati a terra. Metti le mani dietro la testa con i gomiti rivolti verso l'esterno. Coinvolgendo gli addominali, solleva lentamente la parte superiore del corpo da terra, piegandoti in avanti finché il busto non forma un angolo di 45 gradi. Fermati per un momento in alto, quindi abbassa lentamente la parte superiore del corpo fino alla posizione di partenza. Ripetere per il numero di ripetizioni desiderato.",
-    "tr": "Sırt üstü yatın, dizlerinizi bükün ve ayaklarınızı yere düz koyun. Ellerinizi başınızın arkasına, dirsekleriniz dışa bakacak şekilde yerleştirin. Karın kaslarınızı kasarak üst vücudunuzu yerden kaldırın ve gövdeniz 45 derecelik açıya gelene kadar öne doğru kıvırın. Bir an için bu pozisyonda bekleyin, ardından yavaşça başlangıç konumuna geri dönün. İstenen tekrar sayısı için hareketi tekrarlayın."
+    "tr": "Sırt üstü yatın, dizlerinizi bükün ve ayaklarınızı yere düz koyun. Ellerinizi başınızın arkasına, dirsekleriniz dışa bakacak şekilde yerleştirin. Karın kaslarınızı kasarak üst vücudunuzu yerden kaldırın ve gövdeniz 45 derecelik açıya gelene kadar öne doğru kıvırın. Bir an için bu pozisyonda bekleyin, ardından yavaşça başlangıç konumuna geri dönün. İstenen tekrar sayısı için hareketi tekrarlayın.",
+    "ru": "Лягте на спину, согните колени и поставьте ступни на землю. Положите руки за голову локтями наружу. Включив пресс, медленно поднимите верхнюю часть тела от земли, наклоняясь вперед, пока туловище не окажется под углом 45 градусов. Задержитесь на мгновение в верхней точке, затем медленно опустите верхнюю часть тела обратно в исходное положение. Повторите необходимое количество повторений.",
+    "zh": "平躺，膝盖弯曲，双脚平放在地上。将双手放在脑后，手肘向外。收紧腹部，慢慢将上半身抬离地面，向前卷曲，直到躯干呈 45 度角。在最高点稍作停留，然后慢慢将上半身放回起始位置。重复所需的重复次数。"
   },
   "muscle_group": "hip flexors",
   "secondary_muscles": ["hip flexors", "lower back"],
@@ -346,6 +350,8 @@ print(ex["instructions"]["en"])  # English
 print(ex["instructions"]["es"])  # Spanish
 print(ex["instructions"]["it"])  # Italian
 print(ex["instructions"]["tr"])  # Turkish
+print(ex["instructions"]["ru"])  # Russian
+print(ex["instructions"]["zh"])  # Chinese
 ```
 
 ### Python — Load with Pandas
@@ -392,6 +398,8 @@ console.log(ex.instructions.en); // English
 console.log(ex.instructions.es); // Spanish
 console.log(ex.instructions.it); // Italian
 console.log(ex.instructions.tr); // Turkish
+console.log(ex.instructions.ru); // Russian
+console.log(ex.instructions.zh); // Chinese
 ```
 
 ### TypeScript — Type-safe Usage
@@ -408,6 +416,8 @@ interface Exercise {
     es: string;
     it: string;
     tr: string;
+    ru: string;
+    zh: string;
   };
   muscle_group: string;
   secondary_muscles: string[];
