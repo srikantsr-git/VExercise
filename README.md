@@ -333,6 +333,8 @@ print(ex["instructions"]["tr"])  # Turkish
 print(ex["instructions"]["ru"])  # Russian
 print(ex["instructions"]["zh"])  # Chinese
 print(ex["instructions"]["hi"])  # Hindi
+print(ex["instructions"]["pl"])  # Polish
+print(ex["instructions"]["ko"])  # Korean
 ```
 
 ### Python — Load with Pandas
@@ -406,12 +408,23 @@ interface Exercise {
     pl: string;
     ko: string;
   };
+  instruction_steps: {
+    en: string[];
+    es: string[];
+    it: string[];
+    tr: string[];
+    ru: string[];
+    zh: string[];
+    hi: string[];
+    pl: string[];
+    ko: string[];
+  };
   muscle_group: string;
   secondary_muscles: string[];
   target: string;
-  media_id: string | null;
-  image: string | null;
-  gif_url: string | null;
+  media_id: string;
+  image: string;
+  gif_url: string;
   attribution: string;
   created_at: string;
 }
