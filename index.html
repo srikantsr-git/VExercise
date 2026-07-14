@@ -985,13 +985,22 @@
     }
 
     .modal-video-player {
-      display: none; padding: 0 20px 4px;
+      display: none; padding: 0 20px 8px;
     }
     .modal-video-player.show { display: block; }
-    .modal-video-player iframe,
+    .modal-video-player iframe {
+      width: 100%; border-radius: var(--r-lg); border: 1px solid var(--bdr);
+      aspect-ratio: 16/9; background: #000; display: block;
+    }
     .modal-video-player video {
       width: 100%; border-radius: var(--r-lg); border: 1px solid var(--bdr);
-      aspect-ratio: 16/9; background: #000;
+      background: #000; display: block; max-height: 340px;
+      object-fit: contain;
+    }
+    .vid-loading {
+      aspect-ratio:16/9; border-radius: var(--r-lg); background: var(--elevated);
+      display:flex; align-items:center; justify-content:center;
+      font-size:13px; color:var(--tx3); gap:8px;
     }
     .modal-video-close-row {
       display: flex; justify-content: flex-end; margin-top: 6px;
@@ -2463,6 +2472,62 @@ function deleteWorkout(wkId) {
   toast(`Deleted "${name}"`, 'info');
 }
 
+function openModalVideo() {
+  if (!_modalVideoUrl) return;
+  const embed = $('m-video-embed');
+  const url = _modalVideoUrl;
+
+  // Show loading placeholder immediately
+  embed.innerHTML = '<div class="vid-loading"><span style="font-size:22px">&#9654;</span> Loading video\u2026</div>';
+  $('m-video-player').classList.add('show');
+  $('m-video-btn-txt').textContent = '\u25bc Hide video';
+
+  // YouTube
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/);
+  // Vimeo
+  const vmMatch = url.match(/vimeo\.com\/(\d+)/);
+
+  if (ytMatch) {
+    embed.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.src = 'https://www.youtube.com/embed/' + ytMatch[1] + '?autoplay=1&rel=0';
+    iframe.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
+    iframe.allowFullscreen = true;
+    embed.appendChild(iframe);
+  } else if (vmMatch) {
+    embed.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.src = 'https://player.vimeo.com/video/' + vmMatch[1] + '?autoplay=1';
+    iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+    iframe.allowFullscreen = true;
+    embed.appendChild(iframe);
+  } else {
+    // Local uploaded file or direct video URL
+    embed.innerHTML = '';
+    const vid = document.createElement('video');
+    vid.controls = true;
+    vid.autoplay = true;
+    vid.playsinline = true;
+    vid.preload = 'auto';
+    // Detect MIME type from extension
+    const ext = url.split('?')[0].split('.').pop().toLowerCase();
+    const mimeMap = {mp4:'video/mp4', webm:'video/webm', ogv:'video/ogg', ogg:'video/ogg', mov:'video/mp4', avi:'video/x-msvideo', mkv:'video/x-matroska'};
+    const src = document.createElement('source');
+    src.src = url;
+    src.type = mimeMap[ext] || 'video/mp4';
+    vid.appendChild(src);
+    vid.onerror = () => {
+      embed.innerHTML = '<div class="vid-loading" style="color:#ef4444;flex-direction:column;gap:6px">'
+        + '<span style="font-size:28px">\u26a0\ufe0f</span>'
+        + '<span>Could not load video.</span>'
+        + '<a href="' + url + '" target="_blank" style="color:var(--accent);text-decoration:underline;font-size:12px">Open file directly \u2197</a>'
+        + '</div>';
+    };
+    embed.appendChild(vid);
+    vid.play().catch(() => {});
+  }
+}
+
 function exportWorkout(wkId) {
   const wk = S.workouts.find(w => w.id === wkId); if (!wk) return;
   let txt = `${wk.name}\n${'═'.repeat(wk.name.length)}\n\n`;
@@ -2597,28 +2662,6 @@ function toggleModalVideo() {
     openModalVideo();
   }
 }
-
-function openModalVideo() {
-  if (!_modalVideoUrl) return;
-  const embed = $('m-video-embed');
-  embed.innerHTML = '';
-  // Detect YouTube, handle others as <video>
-  const ytMatch = _modalVideoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
-  if (ytMatch) {
-    const iframe = document.createElement('iframe');
-    iframe.src = `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1`;
-    iframe.allow = 'autoplay; encrypted-media; fullscreen';
-    iframe.allowFullscreen = true;
-    embed.appendChild(iframe);
-  } else {
-    const vid = document.createElement('video');
-    vid.src = _modalVideoUrl; vid.controls = true; vid.autoplay = true;
-    embed.appendChild(vid);
-  }
-  $('m-video-player').classList.add('show');
-  $('m-video-btn-txt').textContent = '▼ Hide video';
-}
-
 function closeModalVideo() {
   $('m-video-player').classList.remove('show');
   $('m-video-embed').innerHTML = ''; // stop playback
@@ -2637,13 +2680,21 @@ function openModal(id) {
   $('modal-title').textContent = ex.name;
   $('m-gif').src = ex.gif_url; $('m-gif').alt = ex.name;
 
-  // Fetch video URL asynchronously
-  fetch(`/api/exercises/${id}/video`)
+  // Fetch video URL asynchronously — hide bar until video confirmed
+  _modalVideoUrl = null;
+  $('m-video-bar').classList.remove('show');
+  $('m-video-btn').style.opacity = '';
+  $('m-video-btn').style.pointerEvents = '';
+  $('m-video-btn-txt').textContent = 'Click here to view video';
+
+  fetch('/api/exercises/' + id + '/video', { credentials: 'same-origin' })
     .then(r => r.json())
     .then(d => {
       if (d.video_url) {
         _modalVideoUrl = d.video_url;
         $('m-video-bar').classList.add('show');
+        $('m-video-btn').style.opacity = '';
+        $('m-video-btn').style.pointerEvents = '';
       }
     })
     .catch(() => {});
@@ -3432,6 +3483,10 @@ async function init() {
 
   $('lang-lbl').textContent = S.lang.toUpperCase();
   updateFavBadge(); updateWkBadge();
+
+  // Check auth and populate sidebar user info
+  const authed = await checkAuth();
+  if (!authed) return; // redirected to /login
 
   // Wire events first so UI is responsive
   await wireEvents();

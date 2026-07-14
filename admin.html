@@ -166,6 +166,34 @@
     .vid-url-in:focus{border-color:var(--accent);}
     .vid-url-in::placeholder{color:var(--tx3);}
     .vid-table-wrap{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r-lg);overflow:hidden;}
+
+    /* ---- upload tabs ---- */
+    .vid-tabs{display:flex;gap:0;border-bottom:1px solid var(--bdr);margin-bottom:14px;}
+    .vid-tab{font-size:12.5px;font-weight:500;padding:8px 16px;color:var(--tx3);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;cursor:pointer;background:none;border-left:none;border-right:none;border-top:none;font-family:inherit;}
+    .vid-tab:hover{color:var(--tx1);}
+    .vid-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+    .vid-tab-body{display:none;}
+    .vid-tab-body.active{display:block;}
+
+    /* drag-drop zone */
+    .vid-drop-zone{
+      border:2px dashed var(--bdr-h);border-radius:var(--r-lg);padding:32px 20px;
+      text-align:center;cursor:pointer;transition:all .2s;
+      background:var(--input);position:relative;
+    }
+    .vid-drop-zone.dragover{border-color:var(--accent);background:var(--accent-muted);}
+    .vid-drop-zone.has-file{border-color:rgba(74,222,128,.4);background:rgba(34,197,94,.06);}
+    .vid-drop-icon{font-size:36px;margin-bottom:8px;}
+    .vid-drop-lbl{font-size:13px;font-weight:500;color:var(--tx2);}
+    .vid-drop-sub{font-size:11px;color:var(--tx3);margin-top:4px;}
+    .vid-drop-file-name{font-size:12px;color:#4ade80;font-weight:600;margin-top:6px;}
+    .vid-drop-input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+
+    /* progress bar */
+    .vid-progress-wrap{margin-top:10px;display:none;}
+    .vid-progress-track{height:6px;background:var(--bdr-h);border-radius:3px;overflow:hidden;}
+    .vid-progress-bar{height:100%;background:linear-gradient(90deg,#ff4f00,#ff8c00);width:0%;transition:width .2s;border-radius:3px;}
+    .vid-progress-pct{font-size:11px;color:var(--tx3);margin-top:4px;text-align:right;}
     @media(max-width:768px){.sb{display:none;}.main{min-height:100vh;}}
   </style>
 </head>
@@ -341,13 +369,49 @@
       </div>
       <div class="vid-results" id="vid-ex-results" style="display:none"></div>
 
-      <!-- Form to assign video to selected exercise -->
       <div class="vid-form" id="vid-assign-form" style="display:none">
         <div class="vid-form-title" id="vid-form-title">Assign video to: —</div>
         <div class="vid-form-ex" id="vid-form-ex"></div>
-        <div class="vid-url-row">
-          <input class="vid-url-in" id="vid-url-in" placeholder="Paste YouTube URL or direct video URL…" type="url"/>
-          <button class="gen-btn" onclick="assignVideo()">Save Video</button>
+
+        <!-- Tabs -->
+        <div class="vid-tabs">
+          <button class="vid-tab active" onclick="switchVidTab('url')">🔗 Paste URL</button>
+          <button class="vid-tab" onclick="switchVidTab('upload')">📤 Upload File</button>
+        </div>
+
+        <!-- Tab: URL -->
+        <div class="vid-tab-body active" id="vid-tab-url">
+          <div class="vid-url-row">
+            <input class="vid-url-in" id="vid-url-in" placeholder="Paste YouTube URL or direct video URL…" type="url"/>
+            <button class="gen-btn" onclick="assignVideo()">Save Video</button>
+          </div>
+        </div>
+
+        <!-- Tab: Upload -->
+        <div class="vid-tab-body" id="vid-tab-upload">
+          <div class="vid-drop-zone" id="vid-drop-zone"
+               ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+            <input type="file" class="vid-drop-input" id="vid-file-input"
+                   accept="video/mp4,video/webm,video/ogg,video/quicktime,video/avi,video/x-matroska,.mp4,.webm,.ogv,.mov,.avi,.mkv"
+                   onchange="handleFileSelect(this)"/>
+            <div class="vid-drop-icon">🎬</div>
+            <div class="vid-drop-lbl">Drag & drop a video file here</div>
+            <div class="vid-drop-sub">or click to browse &nbsp;·&nbsp; MP4, WebM, MOV, AVI, MKV</div>
+            <div class="vid-drop-file-name" id="vid-drop-file-name"></div>
+          </div>
+          <div class="vid-progress-wrap" id="vid-progress-wrap">
+            <div class="vid-progress-track"><div class="vid-progress-bar" id="vid-progress-bar"></div></div>
+            <div class="vid-progress-pct" id="vid-progress-pct">0%</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="gen-btn" onclick="uploadVideo()" id="vid-upload-btn" disabled>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M8 2v8M5 5l3-3 3 3"/><path d="M2 13h12"/></svg>
+              Upload & Save
+            </button>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
           <button class="act-btn" style="padding:7px 12px;" onclick="cancelVideoAssign()">Cancel</button>
         </div>
         <div id="vid-assign-status" style="margin-top:8px;font-size:12px;color:var(--tx3)"></div>
@@ -755,6 +819,8 @@ function selectExerciseForVideo(id) {
     <div style="font-size:11px;color:var(--tx3)">${ex.category} · ${ex.equipment}</div></div>`;
   $('vid-url-in').value = '';
   $('vid-assign-status').textContent = '';
+  resetUploadTab();
+  switchVidTab('url');
   $('vid-assign-form').style.display = '';
   $('vid-url-in').focus();
 }
@@ -763,6 +829,7 @@ function cancelVideoAssign() {
   _selectedVidEx = null;
   $('vid-assign-form').style.display = 'none';
   $('vid-assign-status').textContent = '';
+  resetUploadTab();
 }
 
 async function assignVideo() {
@@ -781,6 +848,125 @@ async function assignVideo() {
     cancelVideoAssign();
     loadVideoTable();
   } catch { toast('Network error','error'); }
+}
+
+// ── Video tab switching & upload helpers ──────────────────────
+let _selectedFile = null;
+
+function switchVidTab(tab) {
+  document.querySelectorAll('.vid-tab').forEach((b,i) => {
+    const isActive = (i===0 && tab==='url') || (i===1 && tab==='upload');
+    b.classList.toggle('active', isActive);
+  });
+  $('vid-tab-url').classList.toggle('active', tab==='url');
+  $('vid-tab-upload').classList.toggle('active', tab==='upload');
+}
+
+function resetUploadTab() {
+  _selectedFile = null;
+  const fi = $('vid-file-input');
+  if (fi) fi.value = '';
+  const dz = $('vid-drop-zone');
+  if (dz) { dz.classList.remove('has-file'); }
+  const fn = $('vid-drop-file-name');
+  if (fn) fn.textContent = '';
+  const pw = $('vid-progress-wrap');
+  if (pw) pw.style.display = 'none';
+  const pb = $('vid-progress-bar');
+  if (pb) pb.style.width = '0%';
+  const pp = $('vid-progress-pct');
+  if (pp) pp.textContent = '0%';
+  const ub = $('vid-upload-btn');
+  if (ub) ub.disabled = true;
+}
+
+function handleDragOver(e) {
+  e.preventDefault(); e.stopPropagation();
+  $('vid-drop-zone').classList.add('dragover');
+}
+
+function handleDragLeave(e) {
+  e.preventDefault(); e.stopPropagation();
+  $('vid-drop-zone').classList.remove('dragover');
+}
+
+function handleDrop(e) {
+  e.preventDefault(); e.stopPropagation();
+  $('vid-drop-zone').classList.remove('dragover');
+  const file = e.dataTransfer?.files?.[0];
+  if (file) applyFile(file);
+}
+
+function handleFileSelect(input) {
+  const file = input.files?.[0];
+  if (file) applyFile(file);
+}
+
+function applyFile(file) {
+  const allowed = ['mp4','webm','ogv','ogg','mov','avi','mkv'];
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!allowed.includes(ext)) {
+    $('vid-assign-status').textContent = `❌ File type .${ext} not allowed. Use: ${allowed.join(', ')}`;
+    return;
+  }
+  _selectedFile = file;
+  $('vid-assign-status').textContent = '';
+  const sz = file.size < 1048576
+    ? (file.size/1024).toFixed(1)+' KB'
+    : (file.size/1048576).toFixed(1)+' MB';
+  $('vid-drop-file-name').textContent = `✅ ${file.name}  (${sz})`;
+  $('vid-drop-zone').classList.add('has-file');
+  $('vid-upload-btn').disabled = false;
+}
+
+function uploadVideo() {
+  if (!_selectedVidEx || !_selectedFile) return;
+  const btn = $('vid-upload-btn');
+  btn.disabled = true;
+  const status = $('vid-assign-status');
+  status.textContent = 'Uploading…';
+  const pw = $('vid-progress-wrap');
+  const pb = $('vid-progress-bar');
+  const pp = $('vid-progress-pct');
+  pw.style.display = 'block'; pb.style.width = '0%'; pp.textContent = '0%';
+
+  const fd = new FormData();
+  fd.append('video', _selectedFile);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/admin/exercises/'+_selectedVidEx.id+'/video/upload');
+  xhr.withCredentials = true;
+
+  xhr.upload.addEventListener('progress', e => {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      pb.style.width = pct + '%';
+      pp.textContent = pct + '%';
+    }
+  });
+
+  xhr.addEventListener('load', () => {
+    if (xhr.status === 200 || xhr.status === 201) {
+      pb.style.width = '100%'; pp.textContent = '100%';
+      status.textContent = '';
+      toast('Video uploaded & assigned to "'+_selectedVidEx.name+'"');
+      setTimeout(() => { cancelVideoAssign(); loadVideoTable(); }, 400);
+    } else {
+      let msg = 'Upload failed';
+      try { msg = JSON.parse(xhr.responseText).error || msg; } catch {}
+      status.textContent = '❌ ' + msg;
+      btn.disabled = false;
+      pw.style.display = 'none';
+    }
+  });
+
+  xhr.addEventListener('error', () => {
+    status.textContent = '❌ Network error during upload.';
+    btn.disabled = false;
+    pw.style.display = 'none';
+  });
+
+  xhr.send(fd);
 }
 
 async function deleteVideo(exerciseId) {

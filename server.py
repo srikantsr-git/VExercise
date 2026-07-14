@@ -443,6 +443,37 @@ def delete_exercise_video(exercise_id):
     db.commit()
     return jsonify({"deleted": exercise_id})
 
+ALLOWED_VIDEO_EXTS = {"mp4", "webm", "ogv", "mov", "avi", "mkv"}
+
+@app.route("/api/admin/exercises/<exercise_id>/video/upload", methods=["POST"])
+@admin_required
+def upload_exercise_video(exercise_id):
+    db = get_db()
+    ex = db.execute("SELECT id FROM exercises WHERE id=?", (exercise_id,)).fetchone()
+    if not ex:
+        return jsonify({"error": "Exercise not found"}), 404
+    if "video" not in request.files:
+        return jsonify({"error": "No video file provided (field name: 'video')"}), 400
+    f = request.files["video"]
+    if not f.filename:
+        return jsonify({"error": "Empty filename"}), 400
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext not in ALLOWED_VIDEO_EXTS:
+        return jsonify({"error": f"File type '.{ext}' not allowed. Allowed: {', '.join(ALLOWED_VIDEO_EXTS)}"}), 400
+    safe_name = f"{uuid.uuid4().hex[:8]}-{exercise_id}.{ext}"
+    videos_dir = os.path.join(BASE_DIR, "newvideos")
+    os.makedirs(videos_dir, exist_ok=True)
+    save_path = os.path.join(videos_dir, safe_name)
+    f.save(save_path)
+    video_url = f"/newvideos/{safe_name}"
+    ts = now_iso()
+    db.execute(
+        "INSERT INTO exercise_videos (exercise_id, video_url, updated_at) VALUES (?,?,?) "
+        "ON CONFLICT(exercise_id) DO UPDATE SET video_url=excluded.video_url, updated_at=excluded.updated_at",
+        (exercise_id, video_url, ts))
+    db.commit()
+    return jsonify({"exercise_id": exercise_id, "video_url": video_url, "updated_at": ts}), 201
+
 @app.route("/api/admin/exercises/videos", methods=["GET"])
 @admin_required
 def list_exercise_videos():
@@ -610,6 +641,9 @@ def serve_image(filename): return send_from_directory(os.path.join(BASE_DIR,"ima
 
 @app.route("/videos/<path:filename>")
 def serve_video(filename): return send_from_directory(os.path.join(BASE_DIR,"videos"),filename)
+
+@app.route("/newvideos/<path:filename>")
+def serve_newvideo(filename): return send_from_directory(os.path.join(BASE_DIR,"newvideos"),filename)
 
 @app.route("/data/<path:filename>")
 def serve_data(filename): return send_from_directory(os.path.join(BASE_DIR,"data"),filename)
