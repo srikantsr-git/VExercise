@@ -1,28 +1,38 @@
 """
 VExercise v3 - Full-stack fitness app backend
-  * SQLite: exercises + favorites + workout_plans + users + profiles + selfies
+  * PostgreSQL (Neon): exercises + favorites + workout_plans + users + profiles + selfies
   * Session-based auth (SHA-256 salted passwords)
   * Roles: user / admin   |   Default: admin / admin123
+  * Vercel-compatible: uses DATABASE_URL env var for connection
 """
 
-import json, os, sqlite3, uuid, hashlib, secrets, functools
+import json, os, uuid, hashlib, secrets, functools
 from datetime import datetime, timezone
 from flask import (Flask, g, jsonify, redirect, request,
                    send_from_directory, send_file, session)
+import psycopg2
+import psycopg2.extras
 
 BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
-DB_PATH   = os.path.join(BASE_DIR, "data", "exercises.db")
 JSON_PATH = os.path.join(BASE_DIR, "data", "exercises.json")
-SK_PATH   = os.path.join(BASE_DIR, "data", ".sk")
 
-os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
-if os.path.exists(SK_PATH):
-    with open(SK_PATH) as f:
-        _SK = f.read().strip()
-else:
-    _SK = secrets.token_hex(32)
-    with open(SK_PATH, "w") as f:
-        f.write(_SK)
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
+# Secret key: from env var (Vercel) or local file fallback
+SK_PATH = os.path.join(BASE_DIR, "data", ".sk")
+_SK = os.environ.get("SECRET_KEY", "")
+if not _SK:
+    os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
+    if os.path.exists(SK_PATH):
+        with open(SK_PATH) as f:
+            _SK = f.read().strip()
+    else:
+        _SK = secrets.token_hex(32)
+        try:
+            with open(SK_PATH, "w") as f:
+                f.write(_SK)
+        except OSError:
+            pass  # read-only filesystem on Vercel
 
 app = Flask(__name__, static_folder=BASE_DIR)
 app.secret_key = _SK
@@ -44,10 +54,7 @@ def options_handler(path):
 def get_db():
     db = getattr(g, "_database", None)
     if db is None:
-        db = g._database = sqlite3.connect(DB_PATH)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA journal_mode=WAL")
-        db.execute("PRAGMA foreign_keys=ON")
+        db = g._database = psycopg2.connect(DATABASE_URL)
     return db
 
 @app.teardown_appcontext
@@ -86,12 +93,25 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def fetchone_dict(cur):
+    row = cur.fetchone()
+    if row is None:
+        return None
+    cols = [desc[0] for desc in cur.description]
+    return dict(zip(cols, row))
+
+def fetchall_dict(cur):
+    cols = [desc[0] for desc in cur.description]
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
+
 def init_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    con = sqlite3.connect(DB_PATH)
+    if not DATABASE_URL:
+        print("[DB] WARNING: DATABASE_URL not set, skipping DB init")
+        return
+    con = psycopg2.connect(DATABASE_URL)
     cur = con.cursor()
 
-    cur.executescript("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS exercises (
             id TEXT PRIMARY KEY, name TEXT NOT NULL,
             category TEXT, body_part TEXT, equipment TEXT, target TEXT,
@@ -103,22 +123,28 @@ def init_db():
             steps_en TEXT, steps_es TEXT, steps_it TEXT,
             steps_tr TEXT, steps_ru TEXT, steps_zh TEXT,
             steps_hi TEXT, steps_pl TEXT, steps_ko TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_category  ON exercises(category);
-        CREATE INDEX IF NOT EXISTS idx_equipment ON exercises(equipment);
-        CREATE INDEX IF NOT EXISTS idx_target    ON exercises(target);
-        CREATE INDEX IF NOT EXISTS idx_body_part ON exercises(body_part);
-        CREATE INDEX IF NOT EXISTS idx_name      ON exercises(name COLLATE NOCASE);
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_category  ON exercises(category)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_equipment ON exercises(equipment)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_target    ON exercises(target)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_body_part ON exercises(body_part)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_name      ON exercises(lower(name))")
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS favorites (
             id TEXT PRIMARY KEY, exercise_id TEXT NOT NULL,
             created_at TEXT NOT NULL, UNIQUE(exercise_id)
-        );
-        CREATE INDEX IF NOT EXISTS idx_fav_exercise ON favorites(exercise_id);
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_fav_exercise ON favorites(exercise_id)")
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS workout_plans (
             id TEXT PRIMARY KEY, name TEXT NOT NULL,
             exercises TEXT NOT NULL DEFAULT '[]',
             created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-        );
+        )
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id            TEXT PRIMARY KEY,
             username      TEXT UNIQUE NOT NULL,
@@ -128,10 +154,12 @@ def init_db():
             password_hash TEXT NOT NULL,
             salt          TEXT NOT NULL,
             role          TEXT NOT NULL DEFAULT 'user',
-            is_active     INTEGER NOT NULL DEFAULT 1,
+            is_active     BOOLEAN NOT NULL DEFAULT TRUE,
             created_at    TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_user_username ON users(username);
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_user_username ON users(username)")
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS user_profiles (
             user_id      TEXT PRIMARY KEY,
             display_name TEXT,
@@ -142,7 +170,9 @@ def init_db():
             avatar_data  TEXT,
             updated_at   TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
+        )
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS exercise_selfies (
             id         TEXT PRIMARY KEY,
             user_id    TEXT NOT NULL,
@@ -151,27 +181,32 @@ def init_db():
             caption    TEXT,
             created_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_selfie_user_date ON exercise_selfies(user_id, date);
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_selfie_user_date ON exercise_selfies(user_id, date)")
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS exercise_videos (
             exercise_id TEXT PRIMARY KEY,
             video_url   TEXT NOT NULL,
             updated_at  TEXT NOT NULL
-        );
+        )
     """)
     con.commit()
 
-    count = con.execute("SELECT COUNT(*) FROM exercises").fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM exercises")
+    count = cur.fetchone()[0]
     if count == 0:
-        print(f"[DB] Importing exercises ...")
-        with open(JSON_PATH, "r", encoding="utf-8") as f:
+        print("[DB] Importing exercises ...")
+        json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "exercises.json")
+        with open(json_path, "r", encoding="utf-8") as f:
             exercises = json.load(f)
         for ex in exercises:
             instr = ex.get("instructions", {}) or {}
             steps = ex.get("instruction_steps", {}) or {}
             sm    = ex.get("secondary_muscles", []) or []
             cur.execute("""
-                INSERT OR IGNORE INTO exercises VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO exercises VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (id) DO NOTHING
             """, (
                 ex.get("id"), ex.get("name"), ex.get("category"),
                 ex.get("body_part"), ex.get("equipment"), ex.get("target"),
@@ -191,20 +226,22 @@ def init_db():
     else:
         print(f"[DB] [OK] Database ready -- {count} exercises.")
 
-    ucount = con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM users")
+    ucount = cur.fetchone()[0]
     if ucount == 0:
         salt  = make_salt()
         phash = hash_pw("admin123", salt)
         uid   = str(uuid.uuid4())
         ts    = now_iso()
-        con.execute(
-            "INSERT INTO users (id,username,email,password_hash,salt,role,is_active,created_at) VALUES (?,?,?,?,?,?,?,?)",
-            (uid, "admin", "admin@vexercise.local", phash, salt, "admin", 1, ts))
-        con.execute(
-            "INSERT INTO user_profiles (user_id,display_name,updated_at) VALUES (?,?,?)",
+        cur.execute(
+            "INSERT INTO users (id,username,email,password_hash,salt,role,is_active,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+            (uid, "admin", "admin@vexercise.local", phash, salt, "admin", True, ts))
+        cur.execute(
+            "INSERT INTO user_profiles (user_id,display_name,updated_at) VALUES (%s,%s,%s)",
             (uid, "Administrator", ts))
         con.commit()
         print("[DB] [OK] Default admin: admin / admin123")
+    cur.close()
     con.close()
 
 def row_to_dict(row):
@@ -238,15 +275,19 @@ def register():
         return jsonify({"error":"Username must be >= 3 chars"}), 400
     if len(password) < 6:
         return jsonify({"error":"Password must be >= 6 chars"}), 400
-    db = get_db(); salt = make_salt(); phash = hash_pw(password, salt)
+    db = get_db(); cur = db.cursor()
+    salt = make_salt(); phash = hash_pw(password, salt)
     uid = str(uuid.uuid4()); ts = now_iso()
     try:
-        db.execute("INSERT INTO users (id,username,email,phone,address,password_hash,salt,role,is_active,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                   (uid, username, email, phone, address, phash, salt, "user", 1, ts))
-        db.execute("INSERT INTO user_profiles (user_id,display_name,updated_at) VALUES (?,?,?)",(uid, username, ts))
+        cur.execute("INSERT INTO users (id,username,email,phone,address,password_hash,salt,role,is_active,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                   (uid, username, email, phone, address, phash, salt, "user", True, ts))
+        cur.execute("INSERT INTO user_profiles (user_id,display_name,updated_at) VALUES (%s,%s,%s)",(uid, username, ts))
         db.commit()
-    except sqlite3.IntegrityError:
+    except psycopg2.errors.UniqueViolation:
+        db.rollback()
         return jsonify({"error":"Username already taken"}), 409
+    finally:
+        cur.close()
     session["user_id"] = uid; session["username"] = username; session["role"] = "user"
     return jsonify({"id":uid,"username":username,"role":"user"}), 201
 
@@ -257,8 +298,9 @@ def login():
     password = data.get("password","")
     if not username or not password:
         return jsonify({"error":"username and password required"}), 400
-    db  = get_db()
-    row = db.execute("SELECT * FROM users WHERE username=? AND is_active=1",(username,)).fetchone()
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT * FROM users WHERE username=%s AND is_active=TRUE",(username,))
+    row = fetchone_dict(cur); cur.close()
     if not row or not verify_pw(password, row["salt"], row["password_hash"]):
         return jsonify({"error":"Invalid username or password"}), 401
     session["user_id"] = row["id"]; session["username"] = row["username"]; session["role"] = row["role"]
@@ -272,9 +314,10 @@ def logout():
 def me():
     if "user_id" not in session:
         return jsonify({"error":"Not authenticated"}), 401
-    db  = get_db()
-    row = db.execute("SELECT u.*,p.display_name,p.avatar_data FROM users u LEFT JOIN user_profiles p ON u.id=p.user_id WHERE u.id=?",
-                     (session["user_id"],)).fetchone()
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT u.*,p.display_name,p.avatar_data FROM users u LEFT JOIN user_profiles p ON u.id=p.user_id WHERE u.id=%s",
+                 (session["user_id"],))
+    row = fetchone_dict(cur); cur.close()
     if not row:
         session.clear(); return jsonify({"error":"User not found"}), 401
     return jsonify(user_safe(row))
@@ -283,57 +326,63 @@ def me():
 @app.route("/api/profile", methods=["GET"])
 @login_required
 def get_profile():
-    db = get_db(); uid = session["user_id"]
-    u  = db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
-    p  = db.execute("SELECT * FROM user_profiles WHERE user_id=?",(uid,)).fetchone()
+    db = get_db(); cur = db.cursor(); uid = session["user_id"]
+    cur.execute("SELECT * FROM users WHERE id=%s",(uid,))
+    u = fetchone_dict(cur)
+    cur.execute("SELECT * FROM user_profiles WHERE user_id=%s",(uid,))
+    p = fetchone_dict(cur); cur.close()
     if not u: return jsonify({"error":"User not found"}), 404
-    result = user_safe(u); result["profile"] = dict(p) if p else {}
+    result = user_safe(u); result["profile"] = p if p else {}
     return jsonify(result)
 
 @app.route("/api/profile", methods=["PUT","POST"])
 @login_required
 def update_profile():
     data = request.get_json(silent=True) or {}
-    db = get_db(); uid = session["user_id"]; ts = now_iso()
+    db = get_db(); cur = db.cursor(); uid = session["user_id"]; ts = now_iso()
     for field in ("email","phone","address"):
         if field in data:
-            db.execute(f"UPDATE users SET {field}=? WHERE id=?",(data[field] or None, uid))
+            cur.execute(f"UPDATE users SET {field}=%s WHERE id=%s",(data[field] or None, uid))
     pf = ("display_name","bio","age","weight_kg","height_cm","avatar_data")
-    exists = db.execute("SELECT user_id FROM user_profiles WHERE user_id=?",(uid,)).fetchone()
+    cur.execute("SELECT user_id FROM user_profiles WHERE user_id=%s",(uid,))
+    exists = cur.fetchone()
     if exists:
         for field in pf:
             if field in data:
-                db.execute(f"UPDATE user_profiles SET {field}=?,updated_at=? WHERE user_id=?",(data[field],ts,uid))
+                cur.execute(f"UPDATE user_profiles SET {field}=%s,updated_at=%s WHERE user_id=%s",(data[field],ts,uid))
     else:
-        db.execute("INSERT INTO user_profiles (user_id,display_name,bio,age,weight_kg,height_cm,avatar_data,updated_at) VALUES (?,?,?,?,?,?,?,?)",
+        cur.execute("INSERT INTO user_profiles (user_id,display_name,bio,age,weight_kg,height_cm,avatar_data,updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
                    (uid,data.get("display_name"),data.get("bio"),data.get("age"),data.get("weight_kg"),data.get("height_cm"),data.get("avatar_data"),ts))
-    db.commit(); return jsonify({"ok":True})
+    db.commit(); cur.close()
+    return jsonify({"ok":True})
 
 # ---- SELFIES ----
 @app.route("/api/selfies", methods=["GET"])
 @login_required
 def get_selfies():
-    db = get_db(); uid = session["user_id"]
+    db = get_db(); cur = db.cursor(); uid = session["user_id"]
     date = request.args.get("date","").strip()
     year = request.args.get("year","").strip()
     month = request.args.get("month","").strip()
     full = request.args.get("full","").strip() in ("1", "true")
     cols = "id,date,image_data,caption,created_at" if full else "id,date,caption,created_at"
     if date:
-        rows = db.execute(f"SELECT {cols} FROM exercise_selfies WHERE user_id=? AND date=? ORDER BY created_at",(uid,date)).fetchall()
+        cur.execute(f"SELECT {cols} FROM exercise_selfies WHERE user_id=%s AND date=%s ORDER BY created_at",(uid,date))
     elif year and month:
-        rows = db.execute(f"SELECT {cols} FROM exercise_selfies WHERE user_id=? AND date LIKE ? ORDER BY date,created_at",(uid,f"{year}-{month.zfill(2)}%")).fetchall()
+        cur.execute(f"SELECT {cols} FROM exercise_selfies WHERE user_id=%s AND date LIKE %s ORDER BY date,created_at",(uid,f"{year}-{month.zfill(2)}%"))
     else:
-        rows = db.execute(f"SELECT {cols} FROM exercise_selfies WHERE user_id=? ORDER BY date DESC LIMIT 50",(uid,)).fetchall()
-    return jsonify({"data":[dict(r) for r in rows]})
+        cur.execute(f"SELECT {cols} FROM exercise_selfies WHERE user_id=%s ORDER BY date DESC LIMIT 50",(uid,))
+    rows = fetchall_dict(cur); cur.close()
+    return jsonify({"data":rows})
 
 @app.route("/api/selfies/full/<selfie_id>", methods=["GET"])
 @login_required
 def get_selfie_full(selfie_id):
-    db = get_db(); uid = session["user_id"]
-    row = db.execute("SELECT * FROM exercise_selfies WHERE id=? AND user_id=?",(selfie_id,uid)).fetchone()
+    db = get_db(); cur = db.cursor(); uid = session["user_id"]
+    cur.execute("SELECT * FROM exercise_selfies WHERE id=%s AND user_id=%s",(selfie_id,uid))
+    row = fetchone_dict(cur); cur.close()
     if not row: return jsonify({"error":"Not found"}), 404
-    return jsonify(dict(row))
+    return jsonify(row)
 
 @app.route("/api/selfies", methods=["POST"])
 @login_required
@@ -345,73 +394,86 @@ def add_selfie():
     if not date or not img: return jsonify({"error":"date and image_data required"}), 400
     try: datetime.strptime(date,"%Y-%m-%d")
     except ValueError: return jsonify({"error":"date must be YYYY-MM-DD"}), 400
-    db = get_db(); sid = str(uuid.uuid4()); ts = now_iso()
-    db.execute("INSERT INTO exercise_selfies (id,user_id,date,image_data,caption,created_at) VALUES (?,?,?,?,?,?)",
+    db = get_db(); cur = db.cursor(); sid = str(uuid.uuid4()); ts = now_iso()
+    cur.execute("INSERT INTO exercise_selfies (id,user_id,date,image_data,caption,created_at) VALUES (%s,%s,%s,%s,%s,%s)",
                (sid,uid,date,img,caption,ts))
-    db.commit()
+    db.commit(); cur.close()
     return jsonify({"id":sid,"date":date,"caption":caption,"created_at":ts}), 201
 
 @app.route("/api/selfies/<selfie_id>", methods=["DELETE"])
 @login_required
 def delete_selfie(selfie_id):
-    db = get_db(); uid = session["user_id"]
-    db.execute("DELETE FROM exercise_selfies WHERE id=? AND user_id=?",(selfie_id,uid))
-    db.commit(); return jsonify({"deleted":selfie_id})
+    db = get_db(); cur = db.cursor(); uid = session["user_id"]
+    cur.execute("DELETE FROM exercise_selfies WHERE id=%s AND user_id=%s",(selfie_id,uid))
+    db.commit(); cur.close()
+    return jsonify({"deleted":selfie_id})
 
 # ---- ADMIN ----
 @app.route("/api/admin/stats", methods=["GET"])
 @admin_required
 def admin_stats():
-    db = get_db()
-    return jsonify({"users":db.execute("SELECT COUNT(*) FROM users").fetchone()[0],
-                    "admins":db.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0],
-                    "selfies":db.execute("SELECT COUNT(*) FROM exercise_selfies").fetchone()[0],
-                    "workouts":db.execute("SELECT COUNT(*) FROM workout_plans").fetchone()[0],
-                    "favorites":db.execute("SELECT COUNT(*) FROM favorites").fetchone()[0],
-                    "exercises":db.execute("SELECT COUNT(*) FROM exercises").fetchone()[0]})
+    db = get_db(); cur = db.cursor()
+    def count(q): cur.execute(q); return cur.fetchone()[0]
+    result = {"users":count("SELECT COUNT(*) FROM users"),
+              "admins":count("SELECT COUNT(*) FROM users WHERE role='admin'"),
+              "selfies":count("SELECT COUNT(*) FROM exercise_selfies"),
+              "workouts":count("SELECT COUNT(*) FROM workout_plans"),
+              "favorites":count("SELECT COUNT(*) FROM favorites"),
+              "exercises":count("SELECT COUNT(*) FROM exercises")}
+    cur.close()
+    return jsonify(result)
 
 @app.route("/api/admin/users", methods=["GET"])
 @admin_required
 def admin_get_users():
-    db   = get_db()
-    rows = db.execute("SELECT u.id,u.username,u.email,u.phone,u.address,u.role,u.is_active,u.created_at,p.display_name,p.avatar_data FROM users u LEFT JOIN user_profiles p ON u.id=p.user_id ORDER BY u.created_at DESC").fetchall()
-    return jsonify({"data":[dict(r) for r in rows]})
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT u.id,u.username,u.email,u.phone,u.address,u.role,u.is_active,u.created_at,p.display_name,p.avatar_data FROM users u LEFT JOIN user_profiles p ON u.id=p.user_id ORDER BY u.created_at DESC")
+    rows = fetchall_dict(cur); cur.close()
+    return jsonify({"data":rows})
 
 @app.route("/api/admin/users/<uid>", methods=["PUT"])
 @admin_required
 def admin_update_user(uid):
     data = request.get_json(silent=True) or {}
-    db = get_db()
-    row = db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
-    if not row: return jsonify({"error":"User not found"}), 404
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT * FROM users WHERE id=%s",(uid,))
+    row = fetchone_dict(cur)
+    if not row: cur.close(); return jsonify({"error":"User not found"}), 404
     if "role" in data and row["role"]=="admin" and data["role"]!="admin":
-        if db.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]<=1:
-            return jsonify({"error":"Cannot demote the only admin"}), 400
+        cur.execute("SELECT COUNT(*) FROM users WHERE role='admin'")
+        if cur.fetchone()[0]<=1:
+            cur.close(); return jsonify({"error":"Cannot demote the only admin"}), 400
     for field in ("role","is_active","email","phone","address"):
-        if field in data: db.execute(f"UPDATE users SET {field}=? WHERE id=?",(data[field],uid))
+        if field in data: cur.execute(f"UPDATE users SET {field}=%s WHERE id=%s",(data[field],uid))
     if "display_name" in data:
-        db.execute("UPDATE user_profiles SET display_name=? WHERE user_id=?",(data["display_name"],uid))
-    db.commit(); return jsonify({"ok":True})
+        cur.execute("UPDATE user_profiles SET display_name=%s WHERE user_id=%s",(data["display_name"],uid))
+    db.commit(); cur.close()
+    return jsonify({"ok":True})
 
 @app.route("/api/admin/users/<uid>", methods=["DELETE"])
 @admin_required
 def admin_delete_user(uid):
     if uid == session["user_id"]: return jsonify({"error":"Cannot delete your own account"}), 400
-    db = get_db()
-    row = db.execute("SELECT role FROM users WHERE id=?",(uid,)).fetchone()
-    if not row: return jsonify({"error":"User not found"}), 404
-    if row["role"]=="admin" and db.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]<=1:
-        return jsonify({"error":"Cannot delete the only admin"}), 400
-    db.execute("DELETE FROM exercise_selfies WHERE user_id=?",(uid,))
-    db.execute("DELETE FROM user_profiles WHERE user_id=?",(uid,))
-    db.execute("DELETE FROM users WHERE id=?",(uid,))
-    db.commit(); return jsonify({"deleted":uid})
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT role FROM users WHERE id=%s",(uid,))
+    row = cur.fetchone()
+    if not row: cur.close(); return jsonify({"error":"User not found"}), 404
+    if row[0]=="admin":
+        cur.execute("SELECT COUNT(*) FROM users WHERE role='admin'")
+        if cur.fetchone()[0]<=1:
+            cur.close(); return jsonify({"error":"Cannot delete the only admin"}), 400
+    cur.execute("DELETE FROM exercise_selfies WHERE user_id=%s",(uid,))
+    cur.execute("DELETE FROM user_profiles WHERE user_id=%s",(uid,))
+    cur.execute("DELETE FROM users WHERE id=%s",(uid,))
+    db.commit(); cur.close()
+    return jsonify({"deleted":uid})
 
 # ---- EXERCISE VIDEOS ----
 @app.route("/api/exercises/<exercise_id>/video", methods=["GET"])
 def get_exercise_video(exercise_id):
-    db = get_db()
-    row = db.execute("SELECT * FROM exercise_videos WHERE exercise_id=?", (exercise_id,)).fetchone()
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT * FROM exercise_videos WHERE exercise_id=%s", (exercise_id,))
+    row = fetchone_dict(cur); cur.close()
     if not row:
         return jsonify({"video_url": None})
     return jsonify({"exercise_id": row["exercise_id"], "video_url": row["video_url"], "updated_at": row["updated_at"]})
@@ -423,72 +485,47 @@ def set_exercise_video(exercise_id):
     video_url = data.get("video_url", "").strip()
     if not video_url:
         return jsonify({"error": "video_url is required"}), 400
-    db = get_db()
-    ex = db.execute("SELECT id FROM exercises WHERE id=?", (exercise_id,)).fetchone()
-    if not ex:
-        return jsonify({"error": "Exercise not found"}), 404
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT id FROM exercises WHERE id=%s", (exercise_id,))
+    if not cur.fetchone():
+        cur.close(); return jsonify({"error": "Exercise not found"}), 404
     ts = now_iso()
-    db.execute(
-        "INSERT INTO exercise_videos (exercise_id, video_url, updated_at) VALUES (?,?,?) "
-        "ON CONFLICT(exercise_id) DO UPDATE SET video_url=excluded.video_url, updated_at=excluded.updated_at",
+    cur.execute(
+        "INSERT INTO exercise_videos (exercise_id, video_url, updated_at) VALUES (%s,%s,%s) "
+        "ON CONFLICT (exercise_id) DO UPDATE SET video_url=EXCLUDED.video_url, updated_at=EXCLUDED.updated_at",
         (exercise_id, video_url, ts))
-    db.commit()
+    db.commit(); cur.close()
     return jsonify({"exercise_id": exercise_id, "video_url": video_url, "updated_at": ts})
 
 @app.route("/api/admin/exercises/<exercise_id>/video", methods=["DELETE"])
 @admin_required
 def delete_exercise_video(exercise_id):
-    db = get_db()
-    db.execute("DELETE FROM exercise_videos WHERE exercise_id=?", (exercise_id,))
-    db.commit()
+    db = get_db(); cur = db.cursor()
+    cur.execute("DELETE FROM exercise_videos WHERE exercise_id=%s", (exercise_id,))
+    db.commit(); cur.close()
     return jsonify({"deleted": exercise_id})
-
-ALLOWED_VIDEO_EXTS = {"mp4", "webm", "ogv", "mov", "avi", "mkv"}
 
 @app.route("/api/admin/exercises/<exercise_id>/video/upload", methods=["POST"])
 @admin_required
 def upload_exercise_video(exercise_id):
-    db = get_db()
-    ex = db.execute("SELECT id FROM exercises WHERE id=?", (exercise_id,)).fetchone()
-    if not ex:
-        return jsonify({"error": "Exercise not found"}), 404
-    if "video" not in request.files:
-        return jsonify({"error": "No video file provided (field name: 'video')"}), 400
-    f = request.files["video"]
-    if not f.filename:
-        return jsonify({"error": "Empty filename"}), 400
-    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
-    if ext not in ALLOWED_VIDEO_EXTS:
-        return jsonify({"error": f"File type '.{ext}' not allowed. Allowed: {', '.join(ALLOWED_VIDEO_EXTS)}"}), 400
-    safe_name = f"{uuid.uuid4().hex[:8]}-{exercise_id}.{ext}"
-    videos_dir = os.path.join(BASE_DIR, "newvideos")
-    os.makedirs(videos_dir, exist_ok=True)
-    save_path = os.path.join(videos_dir, safe_name)
-    f.save(save_path)
-    video_url = f"/newvideos/{safe_name}"
-    ts = now_iso()
-    db.execute(
-        "INSERT INTO exercise_videos (exercise_id, video_url, updated_at) VALUES (?,?,?) "
-        "ON CONFLICT(exercise_id) DO UPDATE SET video_url=excluded.video_url, updated_at=excluded.updated_at",
-        (exercise_id, video_url, ts))
-    db.commit()
-    return jsonify({"exercise_id": exercise_id, "video_url": video_url, "updated_at": ts}), 201
+    return jsonify({"error": "File upload not supported on Vercel. Please use the video URL endpoint instead."}), 501
 
 @app.route("/api/admin/exercises/videos", methods=["GET"])
 @admin_required
 def list_exercise_videos():
-    db = get_db()
-    rows = db.execute(
+    db = get_db(); cur = db.cursor()
+    cur.execute(
         "SELECT ev.exercise_id, e.name, ev.video_url, ev.updated_at "
         "FROM exercise_videos ev JOIN exercises e ON e.id=ev.exercise_id "
         "ORDER BY ev.updated_at DESC"
-    ).fetchall()
-    return jsonify({"data": [dict(r) for r in rows]})
+    )
+    rows = fetchall_dict(cur); cur.close()
+    return jsonify({"data": rows})
 
 # ---- EXERCISES ----
 @app.route("/api/exercises", methods=["GET"])
 def get_exercises():
-    db = get_db()
+    db = get_db(); cur = db.cursor()
     try:
         lp = request.args.get("limit","20")
         limit = None if lp.lower() in ("all","0") else min(2000, max(1,int(lp)))
@@ -499,86 +536,116 @@ def get_exercises():
     equipment = request.args.get("equipment","").strip(); target = request.args.get("target","").strip()
     body_part = request.args.get("body_part","").strip(); sort = request.args.get("sort","").strip()
     where,params = [],[]
-    if search:    where.append("(name LIKE ? OR instr_en LIKE ?)"); params+=[f"%{search}%"]*2
-    if category:  where.append("category=?"); params.append(category)
-    if equipment: where.append("equipment=?"); params.append(equipment)
-    if target:    where.append("target=?"); params.append(target)
-    if body_part: where.append("body_part=?"); params.append(body_part)
+    if search:    where.append("(name ILIKE %s OR instr_en ILIKE %s)"); params+=[f"%{search}%"]*2
+    if category:  where.append("category=%s"); params.append(category)
+    if equipment: where.append("equipment=%s"); params.append(equipment)
+    if target:    where.append("target=%s"); params.append(target)
+    if body_part: where.append("body_part=%s"); params.append(body_part)
     wsql = ("WHERE "+" AND ".join(where)) if where else ""
     osql = "ORDER BY "+{"az":"name ASC","za":"name DESC","cat":"category,name","equip":"equipment,name"}.get(sort,"id ASC")
-    total = db.execute(f"SELECT COUNT(*) FROM exercises {wsql}",params).fetchone()[0]
+    cur.execute(f"SELECT COUNT(*) FROM exercises {wsql}",params)
+    total = cur.fetchone()[0]
     if limit is None:
-        rows = db.execute(f"SELECT * FROM exercises {wsql} {osql}",params).fetchall(); pages=1
+        cur.execute(f"SELECT * FROM exercises {wsql} {osql}",params)
+        rows = fetchall_dict(cur); pages=1
     else:
-        rows = db.execute(f"SELECT * FROM exercises {wsql} {osql} LIMIT ? OFFSET ?",params+[limit,offset]).fetchall()
+        cur.execute(f"SELECT * FROM exercises {wsql} {osql} LIMIT %s OFFSET %s",params+[limit,offset])
+        rows = fetchall_dict(cur)
         pages = (total+limit-1)//limit
+    cur.close()
     return jsonify({"total":total,"page":page,"limit":limit or total,"pages":pages,"data":[row_to_dict(r) for r in rows]})
 
 @app.route("/api/exercises/<exercise_id>", methods=["GET"])
 def get_exercise(exercise_id):
-    db = get_db()
-    row = db.execute("SELECT * FROM exercises WHERE id=?",(exercise_id,)).fetchone()
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT * FROM exercises WHERE id=%s",(exercise_id,))
+    row = fetchone_dict(cur); cur.close()
     if row is None: return jsonify({"error":"Exercise not found"}), 404
     return jsonify(row_to_dict(row))
 
 @app.route("/api/filters", methods=["GET"])
 def get_filters():
-    db = get_db()
-    def d(col): return [r[0] for r in db.execute(f"SELECT DISTINCT {col} FROM exercises WHERE {col} IS NOT NULL ORDER BY {col}").fetchall()]
-    return jsonify({"categories":d("category"),"equipments":d("equipment"),"targets":d("target"),"body_parts":d("body_part")})
+    db = get_db(); cur = db.cursor()
+    def d(col):
+        cur.execute(f"SELECT DISTINCT {col} FROM exercises WHERE {col} IS NOT NULL ORDER BY {col}")
+        return [r[0] for r in cur.fetchall()]
+    result = {"categories":d("category"),"equipments":d("equipment"),"targets":d("target"),"body_parts":d("body_part")}
+    cur.close()
+    return jsonify(result)
 
 @app.route("/api/stats", methods=["GET"])
 def get_stats():
-    db = get_db()
-    return jsonify({"total_exercises":db.execute("SELECT COUNT(*) FROM exercises").fetchone()[0],
-                    "by_category":[{"name":r[0],"count":r[1]} for r in db.execute("SELECT category,COUNT(*) c FROM exercises GROUP BY category ORDER BY c DESC").fetchall()],
-                    "by_equipment":[{"name":r[0],"count":r[1]} for r in db.execute("SELECT equipment,COUNT(*) c FROM exercises GROUP BY equipment ORDER BY c DESC").fetchall()],
-                    "by_target":[{"name":r[0],"count":r[1]} for r in db.execute("SELECT target,COUNT(*) c FROM exercises GROUP BY target ORDER BY c DESC").fetchall()],
-                    "by_body_part":[{"name":r[0],"count":r[1]} for r in db.execute("SELECT body_part,COUNT(*) c FROM exercises GROUP BY body_part ORDER BY c DESC").fetchall()]})
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT COUNT(*) FROM exercises"); total = cur.fetchone()[0]
+    cur.execute("SELECT category,COUNT(*) c FROM exercises GROUP BY category ORDER BY c DESC")
+    by_cat = [{"name":r[0],"count":r[1]} for r in cur.fetchall()]
+    cur.execute("SELECT equipment,COUNT(*) c FROM exercises GROUP BY equipment ORDER BY c DESC")
+    by_equip = [{"name":r[0],"count":r[1]} for r in cur.fetchall()]
+    cur.execute("SELECT target,COUNT(*) c FROM exercises GROUP BY target ORDER BY c DESC")
+    by_target = [{"name":r[0],"count":r[1]} for r in cur.fetchall()]
+    cur.execute("SELECT body_part,COUNT(*) c FROM exercises GROUP BY body_part ORDER BY c DESC")
+    by_bp = [{"name":r[0],"count":r[1]} for r in cur.fetchall()]
+    cur.close()
+    return jsonify({"total_exercises":total,"by_category":by_cat,"by_equipment":by_equip,
+                    "by_target":by_target,"by_body_part":by_bp})
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    db = get_db()
-    return jsonify({"status":"ok","exercises":db.execute("SELECT COUNT(*) FROM exercises").fetchone()[0],
-                    "users":db.execute("SELECT COUNT(*) FROM users").fetchone()[0],"version":"3.0"})
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT COUNT(*) FROM exercises"); ex = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM users"); us = cur.fetchone()[0]
+    cur.close()
+    return jsonify({"status":"ok","exercises":ex,"users":us,"version":"3.0"})
 
 # ---- FAVORITES ----
 @app.route("/api/favorites", methods=["GET"])
 def get_favorites():
-    db = get_db(); rows = db.execute("SELECT * FROM favorites ORDER BY created_at DESC").fetchall()
-    return jsonify({"data":[dict(r) for r in rows]})
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT * FROM favorites ORDER BY created_at DESC")
+    rows = fetchall_dict(cur); cur.close()
+    return jsonify({"data":rows})
 
 @app.route("/api/favorites", methods=["POST"])
 def add_favorite():
     data = request.get_json(silent=True) or {}; eid = data.get("exercise_id","").strip()
     if not eid: return jsonify({"error":"exercise_id required"}), 400
-    db = get_db()
-    if not db.execute("SELECT id FROM exercises WHERE id=?",(eid,)).fetchone():
-        return jsonify({"error":"Exercise not found"}), 404
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT id FROM exercises WHERE id=%s",(eid,))
+    if not cur.fetchone(): cur.close(); return jsonify({"error":"Exercise not found"}), 404
     fid = str(uuid.uuid4())
     try:
-        db.execute("INSERT INTO favorites (id,exercise_id,created_at) VALUES (?,?,?)",(fid,eid,now_iso()))
-        db.commit(); return jsonify({"id":fid,"exercise_id":eid}), 201
-    except sqlite3.IntegrityError: return jsonify({"message":"Already a favorite"}), 200
+        cur.execute("INSERT INTO favorites (id,exercise_id,created_at) VALUES (%s,%s,%s) ON CONFLICT (exercise_id) DO NOTHING",(fid,eid,now_iso()))
+        db.commit()
+        cur.close()
+        return jsonify({"id":fid,"exercise_id":eid}), 201
+    except Exception:
+        db.rollback(); cur.close()
+        return jsonify({"message":"Already a favorite"}), 200
 
 @app.route("/api/favorites/sync", methods=["POST"])
 def sync_favorites():
     data = request.get_json(silent=True) or {}; ids = data.get("exercise_ids",[])
-    db = get_db(); db.execute("DELETE FROM favorites")
+    db = get_db(); cur = db.cursor()
+    cur.execute("DELETE FROM favorites")
     for eid in ids:
-        try: db.execute("INSERT OR IGNORE INTO favorites (id,exercise_id,created_at) VALUES (?,?,?)",(str(uuid.uuid4()),eid,now_iso()))
+        try: cur.execute("INSERT INTO favorites (id,exercise_id,created_at) VALUES (%s,%s,%s) ON CONFLICT (exercise_id) DO NOTHING",(str(uuid.uuid4()),eid,now_iso()))
         except: pass
-    db.commit(); return jsonify({"synced":len(ids)})
+    db.commit(); cur.close()
+    return jsonify({"synced":len(ids)})
 
 @app.route("/api/favorites/<exercise_id>", methods=["DELETE"])
 def remove_favorite(exercise_id):
-    db = get_db(); db.execute("DELETE FROM favorites WHERE exercise_id=?",(exercise_id,))
-    db.commit(); return jsonify({"deleted":exercise_id})
+    db = get_db(); cur = db.cursor()
+    cur.execute("DELETE FROM favorites WHERE exercise_id=%s",(exercise_id,))
+    db.commit(); cur.close()
+    return jsonify({"deleted":exercise_id})
 
 # ---- WORKOUTS ----
 @app.route("/api/workouts", methods=["GET"])
 def get_workouts():
-    db = get_db(); rows = db.execute("SELECT * FROM workout_plans ORDER BY updated_at DESC").fetchall()
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT * FROM workout_plans ORDER BY updated_at DESC")
+    rows = fetchall_dict(cur); cur.close()
     result = []
     for r in rows:
         d = dict(r)
@@ -592,13 +659,16 @@ def create_workout():
     data = request.get_json(silent=True) or {}; name = data.get("name","").strip()
     if not name: return jsonify({"error":"name required"}), 400
     wid = data.get("id") or str(uuid.uuid4()); exs = data.get("exercises",[]); ts = now_iso()
-    db = get_db()
-    db.execute("INSERT OR REPLACE INTO workout_plans (id,name,exercises,created_at,updated_at) VALUES (?,?,?,?,?)",(wid,name,json.dumps(exs),ts,ts))
-    db.commit(); return jsonify({"id":wid,"name":name,"exercises":exs,"created_at":ts,"updated_at":ts}), 201
+    db = get_db(); cur = db.cursor()
+    cur.execute("INSERT INTO workout_plans (id,name,exercises,created_at,updated_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,exercises=EXCLUDED.exercises,updated_at=EXCLUDED.updated_at",(wid,name,json.dumps(exs),ts,ts))
+    db.commit(); cur.close()
+    return jsonify({"id":wid,"name":name,"exercises":exs,"created_at":ts,"updated_at":ts}), 201
 
 @app.route("/api/workouts/<wid>", methods=["GET"])
 def get_workout(wid):
-    db = get_db(); row = db.execute("SELECT * FROM workout_plans WHERE id=?",(wid,)).fetchone()
+    db = get_db(); cur = db.cursor()
+    cur.execute("SELECT * FROM workout_plans WHERE id=%s",(wid,))
+    row = fetchone_dict(cur); cur.close()
     if row is None: return jsonify({"error":"Workout not found"}), 404
     d = dict(row)
     try: d["exercises"] = json.loads(d["exercises"])
@@ -607,32 +677,35 @@ def get_workout(wid):
 
 @app.route("/api/workouts/<wid>", methods=["PUT"])
 def update_workout(wid):
-    data = request.get_json(silent=True) or {}; db = get_db()
-    row = db.execute("SELECT * FROM workout_plans WHERE id=?",(wid,)).fetchone(); ts = now_iso()
+    data = request.get_json(silent=True) or {}; db = get_db(); cur = db.cursor()
+    cur.execute("SELECT * FROM workout_plans WHERE id=%s",(wid,))
+    row = fetchone_dict(cur); ts = now_iso()
     if row is None:
         name = data.get("name","Unnamed"); exs = data.get("exercises",[])
-        db.execute("INSERT INTO workout_plans (id,name,exercises,created_at,updated_at) VALUES (?,?,?,?,?)",(wid,name,json.dumps(exs),ts,ts))
-        db.commit(); return jsonify({"id":wid,"name":name,"exercises":exs}), 201
+        cur.execute("INSERT INTO workout_plans (id,name,exercises,created_at,updated_at) VALUES (%s,%s,%s,%s,%s)",(wid,name,json.dumps(exs),ts,ts))
+        db.commit(); cur.close()
+        return jsonify({"id":wid,"name":name,"exercises":exs}), 201
     name = data.get("name",row["name"]); exs = data.get("exercises",json.loads(row["exercises"] or "[]"))
-    db.execute("UPDATE workout_plans SET name=?,exercises=?,updated_at=? WHERE id=?",(name,json.dumps(exs),ts,wid))
-    db.commit(); return jsonify({"id":wid,"name":name,"exercises":exs,"updated_at":ts})
+    cur.execute("UPDATE workout_plans SET name=%s,exercises=%s,updated_at=%s WHERE id=%s",(name,json.dumps(exs),ts,wid))
+    db.commit(); cur.close()
+    return jsonify({"id":wid,"name":name,"exercises":exs,"updated_at":ts})
 
 @app.route("/api/workouts/<wid>", methods=["DELETE"])
 def delete_workout(wid):
-    db = get_db(); db.execute("DELETE FROM workout_plans WHERE id=?",(wid,))
-    db.commit(); return jsonify({"deleted":wid})
+    db = get_db(); cur = db.cursor()
+    cur.execute("DELETE FROM workout_plans WHERE id=%s",(wid,))
+    db.commit(); cur.close()
+    return jsonify({"deleted":wid})
 
 # ---- STATIC ----
 @app.route("/")
 def index():
-    """Serve the main app — redirect to login if not authenticated."""
     if "user_id" not in session:
         return redirect("/login")
     return send_file(os.path.join(BASE_DIR, "index.html"))
 
 @app.route("/login")
 def login_page():
-    """Serve login page — redirect to app if already authenticated."""
     if "user_id" in session:
         return redirect("/")
     return send_file(os.path.join(BASE_DIR, "login.html"))
@@ -656,8 +729,13 @@ def serve_newvideo(filename): return send_from_directory(os.path.join(BASE_DIR,"
 @app.route("/data/<path:filename>")
 def serve_data(filename): return send_from_directory(os.path.join(BASE_DIR,"data"),filename)
 
-if __name__ == "__main__":
+# Initialize DB on module load (Vercel cold start)
+try:
     init_db()
+except Exception as e:
+    print(f"[DB] init_db error: {e}")
+
+if __name__ == "__main__":
     print("\n"+"="*54)
     print("  VExercise v3 -- http://localhost:8765")
     print("="*54)
