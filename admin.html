@@ -383,7 +383,9 @@
         <div class="vid-tab-body active" id="vid-tab-url">
           <div class="vid-url-row">
             <input class="vid-url-in" id="vid-url-in" placeholder="Paste YouTube URL or direct video URL…" type="url"/>
-            <button class="gen-btn" onclick="assignVideo()">Save Video</button>
+            <div id="vid-url-actions" style="display:flex;gap:8px;">
+              <button class="gen-btn" onclick="assignVideo()">Save Video</button>
+            </div>
           </div>
         </div>
 
@@ -740,6 +742,7 @@ async function loadSystem() {
 // Exercise Videos
 // ============================================================
 let _allExercises = [];
+let _assignedVideos = [];
 let _selectedVidEx = null;
 
 async function loadVideos() {
@@ -759,6 +762,14 @@ async function loadVideoTable() {
     const r = await fetch('/api/admin/exercises/videos', {credentials:'same-origin'});
     const d = await r.json();
     const rows = d.data || [];
+    _assignedVideos = rows;
+
+    // Update search results list if a search is active
+    const q = $('vid-ex-search').value.trim();
+    if (q) {
+      renderSearchExercises(q);
+    }
+
     const tbody = $('vid-tbody');
     if (!rows.length) {
       tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No videos assigned yet. Search above to add one.</td></tr>';
@@ -781,28 +792,38 @@ let _vidSearchTimer = null;
 function searchExercisesForVideo(q) {
   clearTimeout(_vidSearchTimer);
   _vidSearchTimer = setTimeout(() => {
-    q = q.trim().toLowerCase();
-    const res = $('vid-ex-results');
-    if (!q) { res.style.display='none'; $('vid-search-count').textContent=''; return; }
-    const found = _allExercises.filter(e =>
-      e.name.toLowerCase().includes(q) || (e.category||'').toLowerCase().includes(q)
-    ).slice(0, 20);
-    $('vid-search-count').textContent = found.length + ' results';
-    if (!found.length) {
-      res.innerHTML = '<div style="padding:12px;color:var(--tx2);font-size:13px">No exercises found.</div>';
-    } else {
-      res.innerHTML = found.map(e => `
+    renderSearchExercises(q);
+  }, 200);
+}
+
+function renderSearchExercises(q) {
+  q = q.trim().toLowerCase();
+  const res = $('vid-ex-results');
+  if (!q) { res.style.display='none'; $('vid-search-count').textContent=''; return; }
+  const found = _allExercises.filter(e =>
+    e.name.toLowerCase().includes(q) || (e.category||'').toLowerCase().includes(q)
+  ).slice(0, 20);
+  $('vid-search-count').textContent = found.length + ' results';
+  if (!found.length) {
+    res.innerHTML = '<div style="padding:12px;color:var(--tx2);font-size:13px">No exercises found.</div>';
+  } else {
+    res.innerHTML = found.map(e => {
+      const assigned = _assignedVideos.find(v => v.exercise_id === e.id);
+      const videoBadge = assigned ? `<span style="color:var(--accent);margin-right:6px;" title="Has assigned video: ${assigned.video_url}">🎬</span>` : '';
+      const removeBtn = assigned ? `<button class="act-btn del" style="font-size:10px;padding:2px 6px;margin-left:8px;font-family:inherit;" onclick="event.stopPropagation(); deleteVideo('${e.id}')">Remove Video</button>` : '';
+      return `
         <div class="vid-ex-item" onclick="selectExerciseForVideo('${e.id}')"
              title="${e.name}">
           <img class="vid-ex-thumb" src="${e.image}" alt="" loading="lazy">
-          <span class="vid-ex-name">${e.name}</span>
-          <div class="vid-ex-tags">
+          <span class="vid-ex-name">${videoBadge}${e.name}</span>
+          <div class="vid-ex-tags" style="display:flex;align-items:center;">
             <span class="role-badge user" style="font-size:10px">${e.category}</span>
+            ${removeBtn}
           </div>
-        </div>`).join('');
-    }
-    res.style.display = '';
-  }, 200);
+        </div>`;
+    }).join('');
+  }
+  res.style.display = '';
 }
 
 function selectExerciseForVideo(id) {
@@ -813,14 +834,33 @@ function selectExerciseForVideo(id) {
   $('vid-ex-search').value = '';
   $('vid-search-count').textContent = '';
   $('vid-form-title').textContent = 'Assign video to: ' + ex.name;
+
+  const assigned = _assignedVideos.find(v => v.exercise_id === id);
+
   $('vid-form-ex').innerHTML = `
     <img src="${ex.image}" style="width:44px;height:34px;object-fit:cover;border-radius:var(--r-sm)">
     <div><div style="font-weight:600;font-size:13px">${ex.name}</div>
     <div style="font-size:11px;color:var(--tx3)">${ex.category} · ${ex.equipment}</div></div>`;
-  $('vid-url-in').value = '';
+
+  $('vid-url-in').value = assigned ? assigned.video_url : '';
   $('vid-assign-status').textContent = '';
   resetUploadTab();
   switchVidTab('url');
+
+  const actDiv = $('vid-url-actions');
+  if (actDiv) {
+    if (assigned) {
+      actDiv.innerHTML = `
+        <button class="gen-btn" onclick="assignVideo()">Save Video</button>
+        <button class="act-btn del" style="padding:9px 16px;font-size:13px;font-weight:600;font-family:inherit;" onclick="deleteVideo('${id}')">Remove Video</button>
+      `;
+    } else {
+      actDiv.innerHTML = `
+        <button class="gen-btn" onclick="assignVideo()">Save Video</button>
+      `;
+    }
+  }
+
   $('vid-assign-form').style.display = '';
   $('vid-url-in').focus();
 }
@@ -977,6 +1017,9 @@ async function deleteVideo(exerciseId) {
     });
     if (!r.ok) { toast('Failed to remove','error'); return; }
     toast('Video removed','info');
+    if (_selectedVidEx && _selectedVidEx.id === exerciseId) {
+      cancelVideoAssign();
+    }
     loadVideoTable();
   } catch { toast('Network error','error'); }
 }
