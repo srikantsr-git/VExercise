@@ -949,67 +949,111 @@
 
     .step-txt { font-size: 13px; line-height: 1.55; color: var(--tx2); }
 
-    /* ── Video button banner ── */
+    /* ── Video CTA button ── */
     .modal-video-bar {
       display: none;
-      margin: 14px 20px 0;
-      border-radius: var(--r-lg);
-      overflow: hidden;
+      margin: 14px 20px 4px;
     }
     .modal-video-bar.show { display: block; }
 
     .modal-video-btn {
-      display: flex; align-items: center; justify-content: center; gap: 10px;
-      width: 100%; padding: 13px 20px;
-      background: linear-gradient(135deg, #ff4f00 0%, #ff8c00 100%);
-      color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.01em;
+      position: relative; overflow: hidden;
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      width: 100%; padding: 15px 20px;
+      background: linear-gradient(135deg, #c23400 0%, #ff4f00 45%, #ff8c00 100%);
+      color: #fff; font-size: 15px; font-weight: 800; letter-spacing: 0.02em;
       border: none; border-radius: var(--r-lg); cursor: pointer;
-      box-shadow: 0 0 20px rgba(255,79,0,0.5), 0 4px 16px rgba(255,79,0,0.35);
+      box-shadow: 0 0 0 3px rgba(255,79,0,.25), 0 0 28px rgba(255,79,0,.55), 0 6px 20px rgba(255,79,0,.4);
       animation: videoPulse 2s ease-in-out infinite;
       transition: box-shadow 0.2s, transform 0.15s;
     }
+    /* shimmer sweep */
+    .modal-video-btn::after {
+      content: '';
+      position: absolute; top: 0; left: -100%;
+      width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      animation: btnShimmer 2.4s ease-in-out infinite;
+    }
+    @keyframes btnShimmer {
+      0%   { left: -100%; }
+      60%, 100% { left: 160%; }
+    }
     .modal-video-btn:hover {
-      box-shadow: 0 0 28px rgba(255,79,0,0.7), 0 6px 20px rgba(255,79,0,0.5);
-      transform: translateY(-1px);
+      box-shadow: 0 0 0 3px rgba(255,79,0,.45), 0 0 40px rgba(255,79,0,.8), 0 8px 28px rgba(255,79,0,.6);
+      transform: translateY(-2px) scale(1.01);
       animation: none;
     }
-    .modal-video-btn .vbtn-icon {
-      width: 32px; height: 32px; background: rgba(255,255,255,0.22);
+    .modal-video-btn:hover::after { animation: none; }
+    .modal-video-btn:active { transform: translateY(0) scale(0.99); }
+
+    .vbtn-play-ic {
+      width: 36px; height: 36px; background: rgba(255,255,255,0.22);
       border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
+      flex-shrink: 0; border: 2px solid rgba(255,255,255,0.35);
     }
-    .modal-video-btn .vbtn-icon svg { width: 14px; height: 14px; }
+    .vbtn-play-ic svg { width: 15px; height: 15px; margin-left: 2px; }
+    .vbtn-label { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+    .vbtn-label-main { font-size: 14px; font-weight: 800; }
+    .vbtn-label-sub  { font-size: 10px; font-weight: 500; opacity: .8; letter-spacing: .02em; }
+    .vbtn-arrow { margin-left: auto; font-size: 18px; opacity: .8; }
+
     @keyframes videoPulse {
-      0%, 100% { box-shadow: 0 0 18px rgba(255,79,0,0.5), 0 4px 16px rgba(255,79,0,0.3); }
-      50%       { box-shadow: 0 0 32px rgba(255,79,0,0.75), 0 4px 24px rgba(255,79,0,0.5); }
+      0%, 100% { box-shadow: 0 0 0 3px rgba(255,79,0,.2), 0 0 22px rgba(255,79,0,.45), 0 4px 16px rgba(255,79,0,.35); }
+      50%       { box-shadow: 0 0 0 4px rgba(255,79,0,.4), 0 0 38px rgba(255,79,0,.7), 0 4px 24px rgba(255,79,0,.55); }
     }
 
-    .modal-video-player {
-      display: none; padding: 0 20px 8px;
+    /* ── Fullscreen Video Overlay ── */
+    .vid-ov {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,.92); backdrop-filter: blur(18px);
+      display: flex; flex-direction: column;
+      opacity: 0; pointer-events: none;
+      transition: opacity .22s var(--ease);
     }
-    .modal-video-player.show { display: block; }
-    .modal-video-player iframe {
-      width: 100%; border-radius: var(--r-lg); border: 1px solid var(--bdr);
-      aspect-ratio: 16/9; background: #000; display: block;
+    .vid-ov.open { opacity: 1; pointer-events: auto; }
+    .vid-ov-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; flex-shrink: 0;
     }
-    .modal-video-player video {
-      width: 100%; border-radius: var(--r-lg); border: 1px solid var(--bdr);
-      background: #000; display: block; max-height: 340px;
+    .vid-ov-title {
+      font-size: 15px; font-weight: 700; color: #fff;
+      max-width: calc(100% - 80px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .vid-ov-close {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      transition: background .15s;
+    }
+    .vid-ov-close:hover { background: rgba(255,79,0,.5); }
+    .vid-ov-close svg { width: 16px; height: 16px; }
+    .vid-ov-body {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 0 20px 20px; min-height: 0;
+    }
+    .vid-ov-body iframe,
+    .vid-ov-body video {
+      width: 100%; max-width: 900px;
+      max-height: 100%;
+      border-radius: var(--r-lg);
+      background: #000;
+      aspect-ratio: 16/9;
       object-fit: contain;
     }
-    .vid-loading {
-      aspect-ratio:16/9; border-radius: var(--r-lg); background: var(--elevated);
-      display:flex; align-items:center; justify-content:center;
-      font-size:13px; color:var(--tx3); gap:8px;
+    .vid-ov-loading {
+      color: rgba(255,255,255,.5); font-size: 14px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
     }
-    .modal-video-close-row {
-      display: flex; justify-content: flex-end; margin-top: 6px;
+    .vid-ov-loading svg { width: 48px; height: 48px; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .vid-ov-error {
+      color: #ef4444; font-size: 14px; text-align: center;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
     }
-    .modal-video-close-btn {
-      font-size: 11px; font-weight: 600; color: var(--tx3);
-      padding: 4px 8px; border-radius: var(--r-sm); transition: color var(--dur);
+    .vid-ov-open-link {
+      color: var(--accent); text-decoration: underline; font-size: 12px;
     }
-    .modal-video-close-btn:hover { color: var(--accent); }
 
     /* Modal add-to-workout section */
     .modal-add-wk { padding: 0 20px 20px; border-top: 1px solid var(--bdr); }
@@ -2349,19 +2393,16 @@
     <div class="modal-media"><img class="modal-gif" id="m-gif" alt=""></div>
     <!-- Video CTA banner (shown only when a video URL exists) -->
     <div class="modal-video-bar" id="m-video-bar">
-      <button class="modal-video-btn" id="m-video-btn" onclick="toggleModalVideo()">
-        <span class="vbtn-icon">
-          <svg viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <button class="modal-video-btn" id="m-video-btn" onclick="openVideoOverlay()">
+        <span class="vbtn-play-ic">
+          <svg viewBox="0 0 24 24" fill="white"><polygon points="6 3 20 12 6 21 6 3"/></svg>
         </span>
-        <span id="m-video-btn-txt">Click here to view video</span>
+        <span class="vbtn-label">
+          <span class="vbtn-label-main">🎬 Click here to view Video</span>
+          <span class="vbtn-label-sub">Watch the full exercise demonstration</span>
+        </span>
+        <span class="vbtn-arrow">›</span>
       </button>
-    </div>
-    <!-- Inline video player -->
-    <div class="modal-video-player" id="m-video-player">
-      <div id="m-video-embed"></div>
-      <div class="modal-video-close-row">
-        <button class="modal-video-close-btn" onclick="closeModalVideo()">✕ Hide video</button>
-      </div>
     </div>
     <div class="modal-meta" id="m-meta"></div>
     <div class="modal-muscles" id="m-muscles"></div>
@@ -2458,6 +2499,27 @@
         <button class="btn btn-secondary btn-sm" onclick="closeCapture()" style="flex:1">Cancel</button>
         <button class="btn btn-primary btn-sm" id="cap-save-btn" onclick="saveSelfieCapture()" style="flex:2">Save</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Fullscreen Video Overlay -->
+<div class="vid-ov" id="vid-ov" role="dialog" aria-modal="true" aria-label="Exercise video player">
+  <div class="vid-ov-hdr">
+    <div class="vid-ov-title" id="vid-ov-title">Exercise Video</div>
+    <button class="vid-ov-close" onclick="closeVideoOverlay()" title="Close (Esc)">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M5 5l10 10M15 5L5 15"/>
+      </svg>
+    </button>
+  </div>
+  <div class="vid-ov-body" id="vid-ov-body">
+    <div class="vid-ov-loading">
+      <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,79,0,.8)" stroke-width="2.5">
+        <circle cx="12" cy="12" r="10" stroke-opacity=".25"/>
+        <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+      </svg>
+      Loading video…
     </div>
   </div>
 </div>
@@ -3233,22 +3295,90 @@ function buildDonut(svgId, legId, entries) {
   t2.setAttribute('font-size','9'); t2.setAttribute('fill','#8a8a9e'); t2.textContent='types'; svg.appendChild(t2);
 }
 
-// ── Modal ─────────────────────────────────────────────────────
-let _modalVideoUrl = null;
+// ── Modal Video Overlay ───────────────────────────────────────
+let _modalVideoUrl  = null;
+let _modalVideoName = '';
 
-function toggleModalVideo() {
-  const player = $('m-video-player');
-  const isOpen = player.classList.contains('show');
-  if (isOpen) {
-    closeModalVideo();
+function openVideoOverlay() {
+  if (!_modalVideoUrl) return;
+  const url  = _modalVideoUrl;
+  const name = _modalVideoName;
+  const body = $('vid-ov-body');
+  const title = $('vid-ov-title');
+  if (!body) return;
+
+  // Set title
+  if (title) title.textContent = name || 'Exercise Video';
+
+  // Show loading spinner
+  body.innerHTML = `<div class="vid-ov-loading">
+    <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,79,0,.8)" stroke-width="2.5">
+      <circle cx="12" cy="12" r="10" stroke-opacity=".25"/>
+      <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+    </svg>
+    Loading video…
+  </div>`;
+
+  // Open overlay
+  $('vid-ov').classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  // Detect video type
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/|youtube\.com\/shorts\/)([-\w]+)/);
+  const vmMatch = url.match(/vimeo\.com\/(\d+)/);
+
+  if (ytMatch) {
+    const iframe = document.createElement('iframe');
+    iframe.src = 'https://www.youtube.com/embed/' + ytMatch[1] + '?autoplay=1&rel=0&modestbranding=1';
+    iframe.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
+    iframe.allowFullscreen = true;
+    body.innerHTML = '';
+    body.appendChild(iframe);
+
+  } else if (vmMatch) {
+    const iframe = document.createElement('iframe');
+    iframe.src = 'https://player.vimeo.com/video/' + vmMatch[1] + '?autoplay=1';
+    iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+    iframe.allowFullscreen = true;
+    body.innerHTML = '';
+    body.appendChild(iframe);
+
   } else {
-    openModalVideo();
+    // Local / direct video file
+    const ext     = url.split('?')[0].split('.').pop().toLowerCase();
+    const mimeMap = { mp4:'video/mp4', webm:'video/webm', ogv:'video/ogg', ogg:'video/ogg',
+                      mov:'video/mp4', avi:'video/x-msvideo', mkv:'video/x-matroska' };
+    const vid = document.createElement('video');
+    vid.controls = true; vid.autoplay = true; vid.playsinline = true; vid.preload = 'auto';
+    const src = document.createElement('source');
+    src.src = url; src.type = mimeMap[ext] || 'video/mp4';
+    vid.appendChild(src);
+    vid.onerror = () => {
+      body.innerHTML = `<div class="vid-ov-error">
+        <span style="font-size:36px">⚠️</span>
+        <span>Could not load the video file.</span>
+        <a href="${url}" target="_blank" class="vid-ov-open-link">Open file directly ↗</a>
+      </div>`;
+    };
+    body.innerHTML = '';
+    body.appendChild(vid);
+    vid.play().catch(() => {});
   }
 }
-function closeModalVideo() {
-  $('m-video-player').classList.remove('show');
-  $('m-video-embed').innerHTML = ''; // stop playback
-  $('m-video-btn-txt').textContent = 'Click here to view video';
+
+function closeVideoOverlay() {
+  const ov = $('vid-ov'); if (!ov) return;
+  ov.classList.remove('open');
+  document.body.style.overflow = '';
+  // stop playback — clear body after transition
+  setTimeout(() => {
+    const body = $('vid-ov-body');
+    if (body) body.innerHTML = `<div class="vid-ov-loading">
+      <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,79,0,.8)" stroke-width="2.5">
+        <circle cx="12" cy="12" r="10" stroke-opacity=".25"/>
+        <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+      </svg>Loading video…</div>`;
+  }, 250);
 }
 
 function openModal(id) {
@@ -3256,28 +3386,20 @@ function openModal(id) {
   S.modalExId = id;
 
   // Reset video state
-  _modalVideoUrl = null;
+  _modalVideoUrl  = null;
+  _modalVideoName = ex.name;
   $('m-video-bar').classList.remove('show');
-  closeModalVideo();
 
   $('modal-title').textContent = ex.name;
   $('m-gif').src = ex.gif_url; $('m-gif').alt = ex.name;
 
-  // Fetch video URL asynchronously — hide bar until video confirmed
-  _modalVideoUrl = null;
-  $('m-video-bar').classList.remove('show');
-  $('m-video-btn').style.opacity = '';
-  $('m-video-btn').style.pointerEvents = '';
-  $('m-video-btn-txt').textContent = 'Click here to view video';
-
+  // Fetch video URL asynchronously — show button only when video confirmed
   fetch('/api/exercises/' + id + '/video', { credentials: 'same-origin' })
     .then(r => r.json())
     .then(d => {
       if (d.video_url) {
         _modalVideoUrl = d.video_url;
         $('m-video-bar').classList.add('show');
-        $('m-video-btn').style.opacity = '';
-        $('m-video-btn').style.pointerEvents = '';
       }
     })
     .catch(() => {});
@@ -3352,7 +3474,6 @@ function openModal(id) {
 function closeModal() {
   $('modal-ov').classList.remove('open');
   document.body.style.overflow = '';
-  closeModalVideo();
   setTimeout(() => { $('m-gif').src = ''; S.modalExId = null; $('m-add-wk').style.display = 'none'; }, 250);
 }
 
@@ -3465,7 +3586,14 @@ async function wireEvents() {
     $('m-add-wk').style.display = vis ? 'none' : '';
     if (!vis) renderModalWkList(S.modalExId);
   });
-  document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      // Close video overlay first if open, otherwise close exercise modal
+      const vidOv = $('vid-ov');
+      if (vidOv && vidOv.classList.contains('open')) { closeVideoOverlay(); return; }
+      closeModal();
+    }
+  });
 
   // Infinite scroll
   new IntersectionObserver(entries => {
