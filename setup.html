@@ -1,48 +1,87 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Developer Setup · ExerciseDB</title>
+  <title>Developer Setup · VExercise</title>
+  <meta name="description" content="VExercise Developer Setup — Import exercises into your database, browse API endpoints, and configure your integration." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <style>
     /* ── Design Tokens ──────────────────────────────── */
     :root {
       --accent:         #ff4f00;
-      --accent-muted:   rgba(255,79,0,0.09);
-      --bg-base:        #f4f4f5;
-      --bg-surface:     #ffffff;
-      --bg-elevated:    #f0f0f1;
-      --border:         #e4e4e7;
-      --border-hover:   #c4c4c7;
-      --text-primary:   #111111;
-      --text-secondary: #71717a;
-      --text-tertiary:  #a1a1aa;
+      --accent-2:       #ff7a39;
+      --accent-muted:   rgba(255,79,0,0.12);
       --radius-sm:  6px;
       --radius-md:  10px;
       --radius-lg:  14px;
-      --radius-xl:  18px;
-      --nav-w: 210px;
+      --radius-xl:  20px;
+      --nav-w: 220px;
+      --ease: cubic-bezier(.4,0,.2,1);
+      --dur: 0.18s;
+    }
+
+    [data-theme="dark"] {
+      --bg-base:        #0a0a0d;
+      --bg-surface:     #111116;
+      --bg-elevated:    #17171e;
+      --bg-card:        #1c1c24;
+      --bg-input:       #14141a;
+      --border:         rgba(255,255,255,0.07);
+      --border-hover:   rgba(255,255,255,0.14);
+      --border-accent:  rgba(255,79,0,0.45);
+      --text-primary:   #f0f0f7;
+      --text-secondary: #8a8a9e;
+      --text-tertiary:  #55556a;
+      --sh-sm: 0 2px 8px rgba(0,0,0,.45);
+      --sh-md: 0 4px 24px rgba(0,0,0,.55);
+    }
+
+    [data-theme="light"] {
+      --bg-base:        #f2f2f6;
+      --bg-surface:     #ffffff;
+      --bg-elevated:    #ebebf0;
+      --bg-card:        #ffffff;
+      --bg-input:       #f0f0f5;
+      --border:         rgba(0,0,0,0.08);
+      --border-hover:   rgba(0,0,0,0.14);
+      --border-accent:  rgba(255,79,0,0.45);
+      --text-primary:   #0e0e16;
+      --text-secondary: #6a6a7e;
+      --text-tertiary:  #9a9aaa;
+      --sh-sm: 0 1px 4px rgba(0,0,0,.06);
+      --sh-md: 0 4px 16px rgba(0,0,0,.10);
     }
 
     /* ── Reset ──────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
       background: var(--bg-base);
       color: var(--text-primary);
       min-height: 100vh;
       font-size: 14px;
       line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
     }
     a { color: inherit; text-decoration: none; }
+    button { font: inherit; cursor: pointer; border: none; background: none; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
     code {
       font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
       font-size: 12px;
       background: var(--bg-elevated);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
-      padding: 1px 5px;
+      padding: 1px 6px;
+      color: var(--accent-2);
     }
 
     /* ── Header ─────────────────────────────────────── */
@@ -59,10 +98,14 @@
       z-index: 100;
     }
     .site-logo {
-      font-size: 17px;
-      font-weight: 700;
-      letter-spacing: -0.4px;
-      color: var(--text-primary);
+      display: flex; align-items: center; gap: 9px;
+      font-size: 17px; font-weight: 800; letter-spacing: -0.04em; color: var(--text-primary);
+      text-decoration: none;
+    }
+    .site-logo-icon {
+      width: 28px; height: 28px; background: var(--accent);
+      border-radius: 7px; display: flex; align-items: center; justify-content: center;
+      font-size: 13px; flex-shrink: 0;
     }
     .site-logo span { color: var(--accent); }
     .back-link {
@@ -74,7 +117,6 @@
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
       padding: 4px 11px;
-      margin-left: auto;
       transition: color .15s, border-color .15s;
     }
     .back-link:hover { color: var(--text-primary); border-color: var(--border-hover); }
@@ -335,10 +377,13 @@
       font-weight: 700;
       padding: 2px 7px;
       border-radius: var(--radius-sm);
-      background: #dcfce7;
-      color: #166534;
+      background: rgba(74,222,128,0.15);
+      color: #4ade80;
       letter-spacing: .04em;
     }
+    .method-badge.post { background: rgba(96,165,250,0.15); color: #60a5fa; }
+    .method-badge.put  { background: rgba(251,191,36,0.15);  color: #fbbf24; }
+    .method-badge.del  { background: rgba(248,113,113,0.15); color: #f87171; }
     .endpoint-path {
       font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
       font-size: 13px;
@@ -449,10 +494,26 @@
     }
     .divider { height: 1px; background: var(--border); margin: 48px 0; }
 
-    /* ── Scrollbar ───────────────────────────────────── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
+    /* ── Theme toggle ────────────────────────────────── */
+    .theme-toggle-btn {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 12px; border-radius: var(--radius-md);
+      border: 1px solid var(--border); background: var(--bg-elevated);
+      color: var(--text-secondary); font-size: 12px; font-weight: 500;
+      transition: all var(--dur) var(--ease); cursor: pointer;
+    }
+    .theme-toggle-btn:hover { border-color: var(--border-hover); color: var(--text-primary); }
+    .theme-toggle-btn svg { width: 13px; height: 13px; }
+    .toggle-knob {
+      width: 30px; height: 16px; background: var(--border-hover);
+      border-radius: 8px; position: relative; transition: background 0.22s;
+    }
+    .toggle-knob::after {
+      content: ''; position: absolute; width: 11px; height: 11px; background: #fff;
+      border-radius: 50%; top: 2.5px; left: 2.5px; transition: transform 0.22s var(--ease);
+    }
+    [data-theme="dark"] .toggle-knob { background: var(--accent); }
+    [data-theme="dark"] .toggle-knob::after { transform: translateX(14px); }
 
     /* ── Responsive ──────────────────────────────────── */
     @media (max-width: 768px) {
@@ -468,15 +529,27 @@
 
 <!-- Header -->
 <header class="site-header">
-  <div class="site-logo">Exercise<span>DB</span></div>
+  <a class="site-logo" href="/">
+    <div class="site-logo-icon">💪</div>
+    <div>V<span>Exercise</span></div>
+  </a>
   <div class="header-divider"></div>
   <span class="header-label">Developer Setup</span>
-  <a class="back-link" href="index.html">
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M10 4L6 8l4 4"/>
-    </svg>
-    Back to Browse
-  </a>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+    <button class="theme-toggle-btn" id="theme-toggle-btn">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+        <path d="M17 13.5A7 7 0 0 1 6.5 3a7 7 0 1 0 10.5 10.5z"/>
+      </svg>
+      <span id="theme-lbl">Dark</span>
+      <div class="toggle-knob"></div>
+    </button>
+    <a class="back-link" href="/">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 4L6 8l4 4"/>
+      </svg>
+      Back to App
+    </a>
+  </div>
 </header>
 
 <!-- Shell -->
@@ -1710,6 +1783,24 @@ const observer = new IntersectionObserver((entries) => {
 }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
 
 sections.forEach(s => observer.observe(s));
+
+// ── Theme Toggle ───────────────────────────────────────────────
+(function() {
+  const saved = localStorage.getItem('vex-theme') || 'dark';
+  applySetupTheme(saved);
+
+  document.getElementById('theme-toggle-btn')?.addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme');
+    applySetupTheme(cur === 'dark' ? 'light' : 'dark');
+  });
+
+  function applySetupTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('vex-theme', t);
+    const lbl = document.getElementById('theme-lbl');
+    if (lbl) lbl.textContent = t === 'dark' ? 'Dark' : 'Light';
+  }
+})();
 </script>
 </body>
 </html>

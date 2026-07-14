@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Sign In · VExercise</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <style>
+    :root{--accent:#ff4f00;--ease:cubic-bezier(.4,0,.2,1);--dur:.18s;--r-md:10px;--r-lg:14px;--r-xl:20px;}
+    [data-theme="dark"]{--bg:#07070a;--surface:#111116;--elevated:#17171e;--bdr:rgba(255,255,255,.07);--bdr-h:rgba(255,255,255,.16);--tx1:#f0f0f7;--tx2:#8a8a9e;--tx3:#55556a;--input:#14141a;--sh:0 8px 40px rgba(0,0,0,.6);}
+    [data-theme="light"]{--bg:#f0f0f5;--surface:#fff;--elevated:#ebebf0;--bdr:rgba(0,0,0,.08);--bdr-h:rgba(0,0,0,.18);--tx1:#0e0e16;--tx2:#6a6a7e;--tx3:#9a9aaa;--input:#f0f0f5;--sh:0 8px 40px rgba(0,0,0,.12);}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--tx1);min-height:100vh;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased;padding:16px;position:relative;overflow:hidden;}
+    .bg-orb{position:fixed;border-radius:50%;filter:blur(80px);opacity:.18;pointer-events:none;z-index:0;animation:float 12s ease-in-out infinite;}
+    .bg-orb-1{width:500px;height:500px;background:var(--accent);top:-120px;left:-140px;}
+    .bg-orb-2{width:400px;height:400px;background:#7c3aed;bottom:-100px;right:-100px;animation-delay:-6s;}
+    @keyframes float{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-30px) scale(1.05)}}
+    .auth-card{position:relative;z-index:1;width:min(440px,100%);background:var(--surface);border:1px solid var(--bdr);border-radius:var(--r-xl);box-shadow:var(--sh);}
+    .auth-top{padding:28px 32px 0;text-align:center;}
+    .auth-logo{display:inline-flex;align-items:center;gap:10px;margin-bottom:6px;}
+    .logo-icon{width:38px;height:38px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+    .logo-text{font-size:22px;font-weight:800;letter-spacing:-.04em;}
+    .logo-text span{color:var(--accent);}
+    .auth-tagline{font-size:13px;color:var(--tx2);margin-bottom:22px;}
+    .auth-tabs{display:flex;border-bottom:1px solid var(--bdr);margin:0 32px;}
+    .auth-tab{flex:1;padding:10px 0;font-size:14px;font-weight:600;color:var(--tx2);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all var(--dur);font-family:inherit;}
+    .auth-tab:hover{color:var(--tx1);}
+    .auth-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .auth-form{padding:22px 32px 26px;}
+    .field{margin-bottom:13px;}
+    .field-label{font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;display:block;}
+    .field-input{width:100%;padding:10px 12px;background:var(--input);border:1px solid var(--bdr);border-radius:var(--r-md);color:var(--tx1);font-size:13px;outline:none;transition:border-color var(--dur),box-shadow var(--dur);font-family:inherit;}
+    .field-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,79,0,.13);}
+    .field-input::placeholder{color:var(--tx3);}
+    .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .field-hint{font-size:11px;color:var(--tx3);margin-top:3px;}
+    .opt{font-size:10px;font-weight:500;color:var(--tx3);padding:1px 5px;border:1px solid var(--bdr);border-radius:4px;margin-left:6px;vertical-align:middle;}
+    .auth-submit{width:100%;padding:11px;background:var(--accent);color:#fff;font-size:14px;font-weight:700;border:none;border-radius:var(--r-md);cursor:pointer;transition:opacity .15s,transform .15s;font-family:inherit;margin-top:2px;}
+    .auth-submit:hover{opacity:.88;transform:translateY(-1px);}
+    .auth-submit:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+    .auth-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:var(--r-md);padding:9px 12px;font-size:13px;color:#f87171;margin-bottom:13px;display:none;}
+    .auth-error.show{display:block;}
+    .divider{height:1px;background:var(--bdr);margin:18px 0;}
+    .auth-foot{text-align:center;font-size:12px;color:var(--tx2);}
+    .auth-foot a{color:var(--accent);font-weight:500;text-decoration:none;}
+    .theme-pill{position:fixed;top:16px;right:16px;z-index:10;display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--bdr);border-radius:20px;padding:5px 10px;font-size:12px;color:var(--tx2);cursor:pointer;transition:all var(--dur);font-family:inherit;}
+    .theme-pill:hover{border-color:var(--bdr-h);}
+    .pw-row{display:flex;gap:3px;margin-top:5px;}
+    .pw-bar{height:3px;flex:1;background:var(--bdr);border-radius:2px;transition:background .3s;}
+    .pw-bar.weak{background:#ef4444;}.pw-bar.fair{background:#f59e0b;}.pw-bar.strong{background:#22c55e;}
+    @media(max-width:480px){.auth-form{padding:18px 18px 22px;}.auth-top{padding:24px 18px 0;}.auth-tabs{margin:0 18px;}.field-row{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<button class="theme-pill" id="theme-btn">
+  <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M17 13.5A7 7 0 0 1 6.5 3a7 7 0 1 0 10.5 10.5z"/></svg>
+  <span id="tlbl">Dark</span>
+</button>
+<div class="bg-orb bg-orb-1"></div>
+<div class="bg-orb bg-orb-2"></div>
+<div class="auth-card">
+  <div class="auth-top">
+    <div class="auth-logo">
+      <div class="logo-icon">&#x1F4AA;</div>
+      <div class="logo-text">V<span>Exercise</span></div>
+    </div>
+    <div class="auth-tagline">Your personal fitness companion</div>
+  </div>
+  <div class="auth-tabs">
+    <button class="auth-tab active" id="tab-login" onclick="showTab('login')">Sign In</button>
+    <button class="auth-tab" id="tab-register" onclick="showTab('register')">Create Account</button>
+  </div>
+
+  <!-- LOGIN -->
+  <form class="auth-form" id="login-form" onsubmit="doLogin(event)">
+    <div class="auth-error" id="login-error"></div>
+    <div class="field">
+      <label class="field-label" for="l-user">Username</label>
+      <input class="field-input" id="l-user" type="text" placeholder="your username" autocomplete="username" required/>
+    </div>
+    <div class="field">
+      <label class="field-label" for="l-pass">Password</label>
+      <input class="field-input" id="l-pass" type="password" placeholder="password" autocomplete="current-password" required/>
+    </div>
+    <button class="auth-submit" id="login-btn" type="submit">Sign In to VExercise</button>
+    <div class="divider"></div>
+    <div class="auth-foot">No account? <a href="#" onclick="showTab('register');return false">Create one free &rarr;</a></div>
+  </form>
+
+  <!-- REGISTER -->
+  <form class="auth-form" id="register-form" style="display:none" onsubmit="doRegister(event)">
+    <div class="auth-error" id="reg-error"></div>
+    <div class="field">
+      <label class="field-label" for="r-user">Username</label>
+      <input class="field-input" id="r-user" type="text" placeholder="choose a username" autocomplete="username" required minlength="3"/>
+      <div class="field-hint">Min 3 characters</div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label class="field-label" for="r-email">Email <span class="opt">optional</span></label>
+        <input class="field-input" id="r-email" type="email" placeholder="you@email.com"/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="r-phone">Phone <span class="opt">optional</span></label>
+        <input class="field-input" id="r-phone" type="tel" placeholder="+91 ..."/>
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label" for="r-addr">Address <span class="opt">optional</span></label>
+      <input class="field-input" id="r-addr" type="text" placeholder="City, Country"/>
+    </div>
+    <div class="field">
+      <label class="field-label" for="r-pass">Password</label>
+      <input class="field-input" id="r-pass" type="password" placeholder="min 6 characters" autocomplete="new-password" required minlength="6" oninput="pwStrength(this.value)"/>
+      <div class="pw-row"><div class="pw-bar" id="pb1"></div><div class="pw-bar" id="pb2"></div><div class="pw-bar" id="pb3"></div><div class="pw-bar" id="pb4"></div></div>
+    </div>
+    <div class="field">
+      <label class="field-label" for="r-conf">Confirm Password</label>
+      <input class="field-input" id="r-conf" type="password" placeholder="repeat password" required/>
+    </div>
+    <button class="auth-submit" id="reg-btn" type="submit">Create My Account</button>
+    <div class="divider"></div>
+    <div class="auth-foot">Have account? <a href="#" onclick="showTab('login');return false">Sign in &rarr;</a></div>
+  </form>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+(function(){
+  function apT(t){document.documentElement.setAttribute('data-theme',t);localStorage.setItem('vex-theme',t);$('tlbl').textContent=t==='dark'?'Dark':'Light';}
+  apT(localStorage.getItem('vex-theme')||'dark');
+  $('theme-btn').addEventListener('click',()=>apT(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'));
+})();
+function showTab(t){
+  $('tab-login').classList.toggle('active',t==='login');$('tab-register').classList.toggle('active',t==='register');
+  $('login-form').style.display=t==='login'?'':' none';$('register-form').style.display=t==='register'?'':' none';
+  setTimeout(()=>(t==='login'?$('l-user'):$('r-user')).focus(),50);
+}
+// fix: login-form shown by default
+document.getElementById('login-form').style.display='';
+document.getElementById('register-form').style.display='none';
+
+function showErr(id,msg){const e=$(id);e.textContent=msg;e.classList.add('show');}
+function clearErr(id){$(id).classList.remove('show');}
+async function doLogin(e){
+  e.preventDefault();clearErr('login-error');
+  const btn=$('login-btn');btn.disabled=true;btn.textContent='Signing in...';
+  try{
+    const r=await fetch('/api/auth/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('l-user').value.trim(),password:$('l-pass').value})});
+    const d=await r.json();
+    if(!r.ok){showErr('login-error',d.error||'Login failed');return;}
+    window.location.href=d.role==='admin'?'/admin':'/';
+  }catch{showErr('login-error','Network error - is the server running?');}
+  finally{btn.disabled=false;btn.textContent='Sign In to VExercise';}
+}
+async function doRegister(e){
+  e.preventDefault();clearErr('reg-error');
+  const pw=$('r-pass').value,c=$('r-conf').value;
+  if(pw!==c){showErr('reg-error','Passwords do not match');return;}
+  const btn=$('reg-btn');btn.disabled=true;btn.textContent='Creating...';
+  try{
+    const r=await fetch('/api/auth/register',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('r-user').value.trim(),email:$('r-email').value.trim()||null,phone:$('r-phone').value.trim()||null,address:$('r-addr').value.trim()||null,password:pw})});
+    const d=await r.json();
+    if(!r.ok){showErr('reg-error',d.error||'Registration failed');return;}
+    window.location.href='/';
+  }catch{showErr('reg-error','Network error - is the server running?');}
+  finally{btn.disabled=false;btn.textContent='Create My Account';}
+}
+function pwStrength(pw){
+  let s=0;if(pw.length>=6)s++;if(pw.length>=10)s++;if(/[A-Z0-9]/.test(pw))s++;if(/[^A-Za-z0-9]/.test(pw))s++;
+  const cls=['',' weak','fair','fair','strong'];
+  for(let i=1;i<=4;i++)$('pb'+i).className='pw-bar'+(i<=s?cls[s]:'');
+}
+fetch('/api/auth/me',{credentials:'same-origin'}).then(r=>{if(r.ok)r.json().then(u=>{window.location.href=u.role==='admin'?'/admin':'/';});}).catch(()=>{});
+</script>
+</body>
+</html>
