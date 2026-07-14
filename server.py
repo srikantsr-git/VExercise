@@ -7,7 +7,7 @@ VExercise v3 - Full-stack fitness app backend
 
 import json, os, sqlite3, uuid, hashlib, secrets, functools
 from datetime import datetime, timezone
-from flask import (Flask, g, jsonify, request,
+from flask import (Flask, g, jsonify, redirect, request,
                    send_from_directory, send_file, session)
 
 BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
@@ -624,10 +624,18 @@ def delete_workout(wid):
 
 # ---- STATIC ----
 @app.route("/")
-def index(): return send_file(os.path.join(BASE_DIR,"index.html"))
+def index():
+    """Serve the main app — redirect to login if not authenticated."""
+    if "user_id" not in session:
+        return redirect("/login")
+    return send_file(os.path.join(BASE_DIR, "index.html"))
 
 @app.route("/login")
-def login_page(): return send_file(os.path.join(BASE_DIR,"login.html"))
+def login_page():
+    """Serve login page — redirect to app if already authenticated."""
+    if "user_id" in session:
+        return redirect("/")
+    return send_file(os.path.join(BASE_DIR, "login.html"))
 
 @app.route("/admin")
 def admin_page(): return send_file(os.path.join(BASE_DIR,"admin.html"))
