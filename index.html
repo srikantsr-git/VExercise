@@ -1100,18 +1100,31 @@
       .sb-brand { display: none; }
       .sb-footer { display: none; }
       .sb-nav {
-        flex-direction: row; width: 100%; padding: 5px 4px;
-        justify-content: space-around; overflow: visible; gap: 0;
+        flex-direction: row; width: 100%; padding: 5px 2px;
+        justify-content: space-around;
+        overflow-x: auto; overflow-y: visible;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; gap: 0;
       }
+      .sb-nav::-webkit-scrollbar { display: none; }
       .nav-label { display: none; }
-      .nav-item { flex-direction: column; gap: 2px; padding: 5px 8px; flex: 1; border-radius: var(--r-sm); }
+      .nav-item {
+        flex-direction: column; gap: 2px; padding: 5px 6px;
+        flex: 0 0 auto; min-width: 52px;
+        border-radius: var(--r-sm);
+      }
       .nav-item span { display: block; font-size: 9px; }
       .nav-ic { width: 20px; height: 20px; }
       .nav-badge { display: none; }
       .main { padding-bottom: 64px; height: auto; min-height: 100vh; }
       .pages { position: relative; }
-      .page { position: relative; transform: none; overflow: visible; }
-      .page.active { opacity: 1; pointer-events: auto; }
+      /* hide inactive pages so they don't stack in normal flow */
+      .page { display: none; position: relative; transform: none; overflow: visible; opacity: 1; }
+      .page.active { display: block; opacity: 1; pointer-events: auto; }
+      /* profile page needs explicit height since parent has no fixed height on mobile */
+      #page-profile { display: none; min-height: calc(100vh - 64px); }
+      #page-profile.active { display: block; }
+      .prof-wrap { height: auto; min-height: calc(100vh - 64px); overflow-y: visible; }
       .explore-body { grid-template-columns: 1fr; }
       .filter-panel { display: none; }
       .stat-cards { grid-template-columns: repeat(2,1fr); }
@@ -2122,6 +2135,9 @@ function navigate(page) {
   document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     el.classList.toggle('active', el.dataset.page === page);
   });
+  // On mobile, scroll the active nav tab into view in the bottom bar
+  const activeTab = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (activeTab) activeTab.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
 
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(`page-${page}`)?.classList.add('active');
