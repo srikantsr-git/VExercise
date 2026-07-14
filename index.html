@@ -949,6 +949,59 @@
 
     .step-txt { font-size: 13px; line-height: 1.55; color: var(--tx2); }
 
+    /* ── Video button banner ── */
+    .modal-video-bar {
+      display: none;
+      margin: 14px 20px 0;
+      border-radius: var(--r-lg);
+      overflow: hidden;
+    }
+    .modal-video-bar.show { display: block; }
+
+    .modal-video-btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 13px 20px;
+      background: linear-gradient(135deg, #ff4f00 0%, #ff8c00 100%);
+      color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.01em;
+      border: none; border-radius: var(--r-lg); cursor: pointer;
+      box-shadow: 0 0 20px rgba(255,79,0,0.5), 0 4px 16px rgba(255,79,0,0.35);
+      animation: videoPulse 2s ease-in-out infinite;
+      transition: box-shadow 0.2s, transform 0.15s;
+    }
+    .modal-video-btn:hover {
+      box-shadow: 0 0 28px rgba(255,79,0,0.7), 0 6px 20px rgba(255,79,0,0.5);
+      transform: translateY(-1px);
+      animation: none;
+    }
+    .modal-video-btn .vbtn-icon {
+      width: 32px; height: 32px; background: rgba(255,255,255,0.22);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .modal-video-btn .vbtn-icon svg { width: 14px; height: 14px; }
+    @keyframes videoPulse {
+      0%, 100% { box-shadow: 0 0 18px rgba(255,79,0,0.5), 0 4px 16px rgba(255,79,0,0.3); }
+      50%       { box-shadow: 0 0 32px rgba(255,79,0,0.75), 0 4px 24px rgba(255,79,0,0.5); }
+    }
+
+    .modal-video-player {
+      display: none; padding: 0 20px 4px;
+    }
+    .modal-video-player.show { display: block; }
+    .modal-video-player iframe,
+    .modal-video-player video {
+      width: 100%; border-radius: var(--r-lg); border: 1px solid var(--bdr);
+      aspect-ratio: 16/9; background: #000;
+    }
+    .modal-video-close-row {
+      display: flex; justify-content: flex-end; margin-top: 6px;
+    }
+    .modal-video-close-btn {
+      font-size: 11px; font-weight: 600; color: var(--tx3);
+      padding: 4px 8px; border-radius: var(--r-sm); transition: color var(--dur);
+    }
+    .modal-video-close-btn:hover { color: var(--accent); }
+
     /* Modal add-to-workout section */
     .modal-add-wk { padding: 0 20px 20px; border-top: 1px solid var(--bdr); }
 
@@ -1781,6 +1834,22 @@
       </div>
     </div>
     <div class="modal-media"><img class="modal-gif" id="m-gif" alt=""></div>
+    <!-- Video CTA banner (shown only when a video URL exists) -->
+    <div class="modal-video-bar" id="m-video-bar">
+      <button class="modal-video-btn" id="m-video-btn" onclick="toggleModalVideo()">
+        <span class="vbtn-icon">
+          <svg viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </span>
+        <span id="m-video-btn-txt">Click here to view video</span>
+      </button>
+    </div>
+    <!-- Inline video player -->
+    <div class="modal-video-player" id="m-video-player">
+      <div id="m-video-embed"></div>
+      <div class="modal-video-close-row">
+        <button class="modal-video-close-btn" onclick="closeModalVideo()">✕ Hide video</button>
+      </div>
+    </div>
     <div class="modal-meta" id="m-meta"></div>
     <div class="modal-muscles" id="m-muscles"></div>
     <div class="modal-instr" id="m-instr"></div>
@@ -2517,12 +2586,67 @@ function buildDonut(svgId, legId, entries) {
 }
 
 // ── Modal ─────────────────────────────────────────────────────
+let _modalVideoUrl = null;
+
+function toggleModalVideo() {
+  const player = $('m-video-player');
+  const isOpen = player.classList.contains('show');
+  if (isOpen) {
+    closeModalVideo();
+  } else {
+    openModalVideo();
+  }
+}
+
+function openModalVideo() {
+  if (!_modalVideoUrl) return;
+  const embed = $('m-video-embed');
+  embed.innerHTML = '';
+  // Detect YouTube, handle others as <video>
+  const ytMatch = _modalVideoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
+  if (ytMatch) {
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1`;
+    iframe.allow = 'autoplay; encrypted-media; fullscreen';
+    iframe.allowFullscreen = true;
+    embed.appendChild(iframe);
+  } else {
+    const vid = document.createElement('video');
+    vid.src = _modalVideoUrl; vid.controls = true; vid.autoplay = true;
+    embed.appendChild(vid);
+  }
+  $('m-video-player').classList.add('show');
+  $('m-video-btn-txt').textContent = '▼ Hide video';
+}
+
+function closeModalVideo() {
+  $('m-video-player').classList.remove('show');
+  $('m-video-embed').innerHTML = ''; // stop playback
+  $('m-video-btn-txt').textContent = 'Click here to view video';
+}
+
 function openModal(id) {
   const ex = getEx(id); if (!ex) return;
   S.modalExId = id;
 
+  // Reset video state
+  _modalVideoUrl = null;
+  $('m-video-bar').classList.remove('show');
+  closeModalVideo();
+
   $('modal-title').textContent = ex.name;
   $('m-gif').src = ex.gif_url; $('m-gif').alt = ex.name;
+
+  // Fetch video URL asynchronously
+  fetch(`/api/exercises/${id}/video`)
+    .then(r => r.json())
+    .then(d => {
+      if (d.video_url) {
+        _modalVideoUrl = d.video_url;
+        $('m-video-bar').classList.add('show');
+      }
+    })
+    .catch(() => {});
 
   const isFav = S.favorites.has(id);
   $('m-fav-btn').classList.toggle('on', isFav);
@@ -2594,6 +2718,7 @@ function openModal(id) {
 function closeModal() {
   $('modal-ov').classList.remove('open');
   document.body.style.overflow = '';
+  closeModalVideo();
   setTimeout(() => { $('m-gif').src = ''; S.modalExId = null; $('m-add-wk').style.display = 'none'; }, 250);
 }
 

@@ -153,6 +153,11 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_selfie_user_date ON exercise_selfies(user_id, date);
+        CREATE TABLE IF NOT EXISTS exercise_videos (
+            exercise_id TEXT PRIMARY KEY,
+            video_url   TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        );
     """)
     con.commit()
 
@@ -401,6 +406,53 @@ def admin_delete_user(uid):
     db.execute("DELETE FROM user_profiles WHERE user_id=?",(uid,))
     db.execute("DELETE FROM users WHERE id=?",(uid,))
     db.commit(); return jsonify({"deleted":uid})
+
+# ---- EXERCISE VIDEOS ----
+@app.route("/api/exercises/<exercise_id>/video", methods=["GET"])
+def get_exercise_video(exercise_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM exercise_videos WHERE exercise_id=?", (exercise_id,)).fetchone()
+    if not row:
+        return jsonify({"video_url": None})
+    return jsonify({"exercise_id": row["exercise_id"], "video_url": row["video_url"], "updated_at": row["updated_at"]})
+
+@app.route("/api/admin/exercises/<exercise_id>/video", methods=["PUT", "POST"])
+@admin_required
+def set_exercise_video(exercise_id):
+    data = request.get_json(silent=True) or {}
+    video_url = data.get("video_url", "").strip()
+    if not video_url:
+        return jsonify({"error": "video_url is required"}), 400
+    db = get_db()
+    ex = db.execute("SELECT id FROM exercises WHERE id=?", (exercise_id,)).fetchone()
+    if not ex:
+        return jsonify({"error": "Exercise not found"}), 404
+    ts = now_iso()
+    db.execute(
+        "INSERT INTO exercise_videos (exercise_id, video_url, updated_at) VALUES (?,?,?) "
+        "ON CONFLICT(exercise_id) DO UPDATE SET video_url=excluded.video_url, updated_at=excluded.updated_at",
+        (exercise_id, video_url, ts))
+    db.commit()
+    return jsonify({"exercise_id": exercise_id, "video_url": video_url, "updated_at": ts})
+
+@app.route("/api/admin/exercises/<exercise_id>/video", methods=["DELETE"])
+@admin_required
+def delete_exercise_video(exercise_id):
+    db = get_db()
+    db.execute("DELETE FROM exercise_videos WHERE exercise_id=?", (exercise_id,))
+    db.commit()
+    return jsonify({"deleted": exercise_id})
+
+@app.route("/api/admin/exercises/videos", methods=["GET"])
+@admin_required
+def list_exercise_videos():
+    db = get_db()
+    rows = db.execute(
+        "SELECT ev.exercise_id, e.name, ev.video_url, ev.updated_at "
+        "FROM exercise_videos ev JOIN exercises e ON e.id=ev.exercise_id "
+        "ORDER BY ev.updated_at DESC"
+    ).fetchall()
+    return jsonify({"data": [dict(r) for r in rows]})
 
 # ---- EXERCISES ----
 @app.route("/api/exercises", methods=["GET"])

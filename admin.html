@@ -148,6 +148,24 @@
     .sys-val{font-size:20px;font-weight:700;color:var(--tx1);}
     .sys-ok{color:#22c55e;}.sys-err{color:#ef4444;}
 
+    /* ---- VIDEOS PAGE ---- */
+    .vid-search-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+    .vid-search-bar .search-in{flex:1;min-width:200px;}
+    .vid-results{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;margin-bottom:18px;}
+    .vid-ex-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--elevated);border:1px solid var(--bdr);border-radius:var(--r-md);cursor:pointer;transition:all .15s;}
+    .vid-ex-item:hover{border-color:var(--accent);background:var(--accent-muted);}
+    .vid-ex-thumb{width:44px;height:34px;object-fit:cover;border-radius:var(--r-sm);flex-shrink:0;background:var(--bdr);}
+    .vid-ex-name{font-size:13px;font-weight:500;flex:1;}
+    .vid-ex-tags{display:flex;gap:4px;}
+    .vid-form{background:var(--card);border:1px solid var(--bdr-a);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:22px;}
+    .vid-form-title{font-size:13px;font-weight:700;color:var(--tx1);margin-bottom:12px;}
+    .vid-form-ex{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--elevated);border-radius:var(--r-md);margin-bottom:12px;}
+    .vid-form-ex img{width:44px;height:34px;object-fit:cover;border-radius:var(--r-sm);}
+    .vid-url-row{display:flex;gap:8px;}
+    .vid-url-in{flex:1;padding:9px 12px;background:var(--input);border:1px solid var(--bdr);border-radius:var(--r-md);color:var(--tx1);font-size:13px;outline:none;font-family:inherit;transition:border-color .15s;}
+    .vid-url-in:focus{border-color:var(--accent);}
+    .vid-url-in::placeholder{color:var(--tx3);}
+    .vid-table-wrap{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r-lg);overflow:hidden;}
     @media(max-width:768px){.sb{display:none;}.main{min-height:100vh;}}
   </style>
 </head>
@@ -178,6 +196,10 @@
     <button class="nav-item" data-page="system" onclick="navigate('system')">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="3"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"/></svg>
       System
+    </button>
+    <button class="nav-item" data-page="videos" onclick="navigate('videos')">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="16" height="12" rx="2"/><polygon points="9 8 14 11 9 14 9 8" fill="currentColor" stroke="none"/></svg>
+      Exercise Videos
     </button>
     <button class="nav-item" onclick="window.location.href='/'">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 10.5L10 3l7 7.5"/><path d="M5 8.5V17h4v-4h2v4h4V8.5"/></svg>
@@ -307,6 +329,40 @@
       </div>
     </div>
 
+    <!-- EXERCISE VIDEOS -->
+    <div id="page-videos" style="display:none">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:6px;letter-spacing:-.01em">Assign Exercise Video</h2>
+      <p style="font-size:13px;color:var(--tx2);margin-bottom:18px">Search for an exercise, then paste a YouTube or direct video URL to link it.</p>
+
+      <!-- Search exercises -->
+      <div class="vid-search-bar">
+        <input class="search-in" id="vid-ex-search" placeholder="Search exercises to assign video…" oninput="searchExercisesForVideo(this.value)"/>
+        <span id="vid-search-count" style="font-size:12px;color:var(--tx2);align-self:center"></span>
+      </div>
+      <div class="vid-results" id="vid-ex-results" style="display:none"></div>
+
+      <!-- Form to assign video to selected exercise -->
+      <div class="vid-form" id="vid-assign-form" style="display:none">
+        <div class="vid-form-title" id="vid-form-title">Assign video to: —</div>
+        <div class="vid-form-ex" id="vid-form-ex"></div>
+        <div class="vid-url-row">
+          <input class="vid-url-in" id="vid-url-in" placeholder="Paste YouTube URL or direct video URL…" type="url"/>
+          <button class="gen-btn" onclick="assignVideo()">Save Video</button>
+          <button class="act-btn" style="padding:7px 12px;" onclick="cancelVideoAssign()">Cancel</button>
+        </div>
+        <div id="vid-assign-status" style="margin-top:8px;font-size:12px;color:var(--tx3)"></div>
+      </div>
+
+      <!-- Table of existing videos -->
+      <h3 style="font-size:13px;font-weight:700;color:var(--tx2);letter-spacing:.03em;text-transform:uppercase;margin-bottom:10px;margin-top:4px;">Videos Assigned</h3>
+      <div class="vid-table-wrap">
+        <table>
+          <thead><tr><th>Exercise</th><th>Video URL</th><th>Updated</th><th>Actions</th></tr></thead>
+          <tbody id="vid-tbody"><tr class="empty-row"><td colspan="4">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -408,12 +464,13 @@ const PAGE_META = {
   users:{title:'Users',sub:'Manage all registered users'},
   dbsetup:{title:'Database Setup',sub:'Import exercises, browse API docs'},
   system:{title:'System',sub:'Health check and server info'},
+  videos:{title:'Exercise Videos',sub:'Assign video links to exercises'},
 };
 
 function navigate(page) {
   currentPage = page;
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.page === page));
-  ['dashboard','users','dbsetup','system'].forEach(p => {
+  ['dashboard','users','dbsetup','system','videos'].forEach(p => {
     const el = $('page-'+p); if (el) el.style.display = p===page ? '' : 'none';
   });
   const meta = PAGE_META[page] || {};
@@ -423,6 +480,7 @@ function navigate(page) {
   if (page === 'users')     loadUsers();
   if (page === 'system')    loadSystem();
   if (page === 'dbsetup')   initDbSetup();
+  if (page === 'videos')    loadVideos();
 }
 
 // ============================================================
@@ -612,6 +670,129 @@ async function loadSystem() {
     $('sys-health').textContent  = 'Offline';
     $('sys-health').className    = 'sys-val sys-err';
   }
+}
+
+// ============================================================
+// Exercise Videos
+// ============================================================
+let _allExercises = [];
+let _selectedVidEx = null;
+
+async function loadVideos() {
+  // Load exercise list for search
+  if (!_allExercises.length) {
+    try {
+      const r = await fetch('/api/exercises?limit=all', {credentials:'same-origin'});
+      const d = await r.json();
+      _allExercises = d.data || [];
+    } catch {}
+  }
+  loadVideoTable();
+}
+
+async function loadVideoTable() {
+  try {
+    const r = await fetch('/api/admin/exercises/videos', {credentials:'same-origin'});
+    const d = await r.json();
+    const rows = d.data || [];
+    const tbody = $('vid-tbody');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No videos assigned yet. Search above to add one.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(v => {
+      const updated = new Date(v.updated_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      const short = v.video_url.length > 50 ? v.video_url.slice(0,47)+'…' : v.video_url;
+      return `<tr>
+        <td style="font-weight:600">${v.name}</td>
+        <td><a href="${v.video_url}" target="_blank" title="${v.video_url}" style="color:var(--accent);font-size:12px;word-break:break-all">${short}</a></td>
+        <td style="color:var(--tx2);font-size:12px">${updated}</td>
+        <td><button class="act-btn del" onclick="deleteVideo('${v.exercise_id}')">Remove</button></td>
+      </tr>`;
+    }).join('');
+  } catch { toast('Failed to load videos','error'); }
+}
+
+let _vidSearchTimer = null;
+function searchExercisesForVideo(q) {
+  clearTimeout(_vidSearchTimer);
+  _vidSearchTimer = setTimeout(() => {
+    q = q.trim().toLowerCase();
+    const res = $('vid-ex-results');
+    if (!q) { res.style.display='none'; $('vid-search-count').textContent=''; return; }
+    const found = _allExercises.filter(e =>
+      e.name.toLowerCase().includes(q) || (e.category||'').toLowerCase().includes(q)
+    ).slice(0, 20);
+    $('vid-search-count').textContent = found.length + ' results';
+    if (!found.length) {
+      res.innerHTML = '<div style="padding:12px;color:var(--tx2);font-size:13px">No exercises found.</div>';
+    } else {
+      res.innerHTML = found.map(e => `
+        <div class="vid-ex-item" onclick="selectExerciseForVideo('${e.id}')"
+             title="${e.name}">
+          <img class="vid-ex-thumb" src="${e.image}" alt="" loading="lazy">
+          <span class="vid-ex-name">${e.name}</span>
+          <div class="vid-ex-tags">
+            <span class="role-badge user" style="font-size:10px">${e.category}</span>
+          </div>
+        </div>`).join('');
+    }
+    res.style.display = '';
+  }, 200);
+}
+
+function selectExerciseForVideo(id) {
+  const ex = _allExercises.find(e => e.id === id);
+  if (!ex) return;
+  _selectedVidEx = ex;
+  $('vid-ex-results').style.display = 'none';
+  $('vid-ex-search').value = '';
+  $('vid-search-count').textContent = '';
+  $('vid-form-title').textContent = 'Assign video to: ' + ex.name;
+  $('vid-form-ex').innerHTML = `
+    <img src="${ex.image}" style="width:44px;height:34px;object-fit:cover;border-radius:var(--r-sm)">
+    <div><div style="font-weight:600;font-size:13px">${ex.name}</div>
+    <div style="font-size:11px;color:var(--tx3)">${ex.category} · ${ex.equipment}</div></div>`;
+  $('vid-url-in').value = '';
+  $('vid-assign-status').textContent = '';
+  $('vid-assign-form').style.display = '';
+  $('vid-url-in').focus();
+}
+
+function cancelVideoAssign() {
+  _selectedVidEx = null;
+  $('vid-assign-form').style.display = 'none';
+  $('vid-assign-status').textContent = '';
+}
+
+async function assignVideo() {
+  if (!_selectedVidEx) return;
+  const url = $('vid-url-in').value.trim();
+  if (!url) { $('vid-assign-status').textContent = 'Please enter a video URL.'; return; }
+  try {
+    const r = await fetch('/api/admin/exercises/'+_selectedVidEx.id+'/video', {
+      method:'PUT', credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({video_url: url})
+    });
+    const d = await r.json();
+    if (!r.ok) { $('vid-assign-status').textContent = d.error||'Error saving.'; return; }
+    toast('Video assigned to "'+_selectedVidEx.name+'"');
+    cancelVideoAssign();
+    loadVideoTable();
+  } catch { toast('Network error','error'); }
+}
+
+async function deleteVideo(exerciseId) {
+  if (!confirm('Remove video for this exercise?')) return;
+  try {
+    const r = await fetch('/api/admin/exercises/'+exerciseId+'/video', {
+      method:'DELETE', credentials:'same-origin'
+    });
+    if (!r.ok) { toast('Failed to remove','error'); return; }
+    toast('Video removed','info');
+    loadVideoTable();
+  } catch { toast('Network error','error'); }
 }
 
 init();
