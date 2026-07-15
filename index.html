@@ -1486,9 +1486,16 @@
       margin-bottom: 16px;
     }
     .slideshow-image {
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
       object-fit: contain;
+      opacity: 0;
+      transition: opacity 0.4s ease-in-out;
+    }
+    .slideshow-image.active {
+      opacity: 1;
     }
     .slideshow-overlay {
       position: absolute;
@@ -1498,6 +1505,7 @@
       background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
       padding: 24px 20px 20px;
       color: #fff;
+      z-index: 10;
     }
     .slideshow-date {
       font-size: 12px;
@@ -2447,7 +2455,8 @@
       <button class="mh-btn" id="slideshow-close" onclick="closeSlideshowModal()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
     </div>
     <div class="slideshow-content">
-      <img id="slideshow-img" class="slideshow-image" src="" alt="Slideshow Image">
+      <img id="slideshow-img-1" class="slideshow-image active" src="" alt="Slideshow Image">
+      <img id="slideshow-img-2" class="slideshow-image" src="" alt="Slideshow Image">
       <div class="slideshow-overlay">
         <div id="slideshow-date" class="slideshow-date">Date</div>
         <div id="slideshow-caption" class="slideshow-caption">Caption</div>
@@ -4087,6 +4096,8 @@ function scrollSlider(mKey, dir) {
   }
 }
 
+let _activeImgNum = 1;
+
 async function openFullSelfie(id) {
   try {
     const res = await fetch(`/api/selfies/full/${id}`, { credentials: 'same-origin' });
@@ -4095,8 +4106,13 @@ async function openFullSelfie(id) {
       S.slideshowList = [s];
       S.slideshowIndex = 0;
       S.slideshowPlaying = false;
+
+      _activeImgNum = 1;
+      $('slideshow-img-1').classList.add('active');
+      $('slideshow-img-2').classList.remove('active');
+
       $('slideshow-ov').classList.add('open');
-      updateSlideshow();
+      updateSlideshow(true);
     }
   } catch {}
 }
@@ -4125,8 +4141,12 @@ async function openSlideshowModal() {
     S.slideshowPlaying = false;
     S.slideshowSpeed = parseInt($('ss-speed')?.value || 1000);
     
+    _activeImgNum = 1;
+    $('slideshow-img-1').classList.add('active');
+    $('slideshow-img-2').classList.remove('active');
+
     $('slideshow-ov').classList.add('open');
-    updateSlideshow();
+    updateSlideshow(true);
     
     // Auto-start slideshow
     startPlaySlideshow();
@@ -4138,13 +4158,39 @@ async function openSlideshowModal() {
 function closeSlideshowModal() {
   stopPlaySlideshow();
   $('slideshow-ov').classList.remove('open');
+  setTimeout(() => {
+    $('slideshow-img-1').src = '';
+    $('slideshow-img-2').src = '';
+    $('slideshow-img-1').classList.add('active');
+    $('slideshow-img-2').classList.remove('active');
+    _activeImgNum = 1;
+  }, 250);
 }
 
-function updateSlideshow() {
+function updateSlideshow(instant = false) {
   if (!S.slideshowList || S.slideshowList.length === 0) return;
   const s = S.slideshowList[S.slideshowIndex];
   
-  $('slideshow-img').src = s.image_data;
+  const activeImg = $('slideshow-img-' + _activeImgNum);
+  const inactiveImg = $('slideshow-img-' + (_activeImgNum === 1 ? 2 : 1));
+  
+  if (instant) {
+    activeImg.src = s.image_data;
+    activeImg.classList.add('active');
+    inactiveImg.classList.remove('active');
+    inactiveImg.src = '';
+  } else {
+    // Crossfade: Load new image onto the inactive image element
+    inactiveImg.src = s.image_data;
+    
+    // Switch active state
+    inactiveImg.classList.add('active');
+    activeImg.classList.remove('active');
+    
+    // Swap global active pointer
+    _activeImgNum = _activeImgNum === 1 ? 2 : 1;
+  }
+  
   $('slideshow-date').textContent = new Date(s.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   $('slideshow-caption').textContent = s.caption || 'No caption';
   $('ss-progress').textContent = `${S.slideshowIndex + 1} of ${S.slideshowList.length}`;
